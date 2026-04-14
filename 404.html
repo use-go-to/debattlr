@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script>
+    const path = window.location.pathname.replace('/debattle', '') || '/';
+    sessionStorage.setItem('redirect', path);
+    window.location.replace('/debattle/');
+  </script>
+</head>
+</html>
