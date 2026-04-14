@@ -33,10 +33,7 @@ export default function AiSummary() {
     setAllSummaries(data)
     const mine = data.find(s => s.member_id === member?.id)
     if (mine) { setMySummary(mine); setAnalyzed(true) }
-    // Auto advance if all done and host
-    if (data.length >= members.length && member?.is_host) {
-      await updateChannelStatus(channel.id, 'peer_vote')
-    }
+    // Ne pas auto-avancer — l'hôte décide quand passer au vote
   }
 
   async function handleAnalyze() {
@@ -155,8 +152,13 @@ export default function AiSummary() {
       )}
 
       {!waiting && member?.is_host && (
-        <div className="badge badge-success" style={{ justifyContent: 'center' }}>
-          ✅ Tout le monde analysé — passage au vote pair-à-pair…
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
+          <div className="badge badge-success" style={{ justifyContent: 'center' }}>
+            ✅ Tout le monde a été analysé
+          </div>
+          <button className="btn btn-primary" onClick={() => updateChannelStatus(channel.id, 'peer_vote')}>
+            Passer au vote pair-à-pair →
+          </button>
         </div>
       )}
     </div>
