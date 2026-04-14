@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/AppContext'
-import { callGroq, saveTopics, updateChannelStatus } from '../lib/supabase'
+import { supabase, callGroq, saveTopics, updateChannelStatus } from '../lib/supabase'
 
 export default function Lobby() {
   const navigate = useNavigate()
@@ -20,6 +20,16 @@ export default function Lobby() {
     if (!channel) return
     if (channel.status === 'topic_vote') navigate('/vote', { replace: true })
   }, [channel?.status])
+
+  // Polling fallback si realtime ne déclenche pas
+  useEffect(() => {
+    if (!channel) return
+    const interval = setInterval(async () => {
+      const { data } = await supabase.from('channels').select('status,topic').eq('id', channel.id).single()
+      if (data?.status === 'topic_vote') navigate('/vote', { replace: true })
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [channel?.id])
 
   async function handleStart() {
     if (members.length < 2) return showToast('Il faut au moins 2 participants')
