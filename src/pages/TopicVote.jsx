@@ -67,7 +67,7 @@ export default function TopicVote() {
     const maxVotes = Math.max(...Object.values(counts))
     const winners  = t.filter(tp => (counts[tp.id] || 0) === maxVotes)
     if (winners.length > 1) { setTie(true); return }
-    await updateChannelStatus(channel.id, 'debate', { topic: winners[0].text })
+    await updateChannelStatus(channel.id, 'debate', { topic: winners[0].text, current_speaker_index: 0, turn_started_at: new Date().toISOString() })
   }
 
   async function handleVote(topicId) {
@@ -75,7 +75,7 @@ export default function TopicVote() {
     try {
       if (hostPicks || tie) {
         // Choix direct de l'hôte
-        await updateChannelStatus(channel.id, 'debate', { topic: topics.find(t => t.id === topicId)?.text })
+        await updateChannelStatus(channel.id, 'debate', { topic: topics.find(t => t.id === topicId)?.text, current_speaker_index: 0, turn_started_at: new Date().toISOString() })
       } else {
         await voteForTopic(channel.id, member.id, topicId)
         setMyVote(topicId)
