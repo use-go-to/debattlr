@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/AppContext'
 import { supabase, updateChannelStatus, callGroq } from '../lib/supabase'
-import { soundSubmit, soundMessage, soundMyTurn, soundAI, soundNewRound, soundDebateEnd, soundClick } from '../lib/sounds'
+import { soundSubmit, soundMessage, soundMyTurn, soundAI, soundNewRound, soundDebateEnd, soundClick, speak } from '../lib/sounds'
 
 export default function Debate() {
   const navigate = useNavigate()
@@ -343,6 +343,7 @@ export default function Debate() {
                   <div className="avatar" style={{ width: 22, height: 22, fontSize: '0.7rem' }}>{t.member_name[0]}</div>
                   <strong>{t.member_name}</strong>
                   <span className="badge badge-accent" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>R{t.round}</span>
+                  <button onClick={() => speak(t.content)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', opacity: 0.6 }} title="Écouter">🔊</button>
                 </div>
                 <p style={{ fontSize: '0.9rem', lineHeight: 1.5 }}>{t.content}</p>
               </div>
@@ -350,7 +351,10 @@ export default function Debate() {
           }
           if (item.type === 'commentary') return (
             <div key={`comm-${item.data.round}`} style={{ padding: '1rem', background: 'rgba(124,106,247,0.08)', borderRadius: 'var(--radius)', border: '1px solid var(--accent)' }}>
-              <div style={{ fontSize: '0.7rem', color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.1em', marginBottom: '0.5rem' }}>📺 COMMENTATEUR — ROUND {item.data.round}</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <div style={{ fontSize: '0.7rem', color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.1em' }}>📺 COMMENTATEUR — ROUND {item.data.round}</div>
+                <button onClick={() => speak(item.data.content)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', opacity: 0.6 }} title="Écouter">🔊</button>
+              </div>
               <p style={{ fontSize: '0.9rem', lineHeight: 1.6, color: 'var(--text)', fontStyle: 'italic' }}>{item.data.content}</p>
             </div>
           )
