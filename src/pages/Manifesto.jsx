@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/AppContext'
 import { callGroq, getAiSummaries, getPeerVotes, saveManifesto, getManifestoByChannel } from '../lib/supabase'
+import { speak } from '../lib/sounds'
 
 export default function Manifesto() {
   const navigate = useNavigate()
@@ -158,7 +159,10 @@ export default function Manifesto() {
               </div>
               <div style={{ flex: 1 }}>
                 <div className="fw-bold" style={{ fontSize: '0.95rem' }}>{r.name}</div>
-                <div className="text-muted text-xs" style={{ lineHeight: 1.3 }}>{r.justification}</div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.3rem' }}>
+                  <div className="text-muted text-xs" style={{ lineHeight: 1.3, flex: 1 }}>{r.justification}</div>
+                  <button onClick={() => speak(r.justification)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem', opacity: 0.6, flexShrink: 0 }} title="Écouter">🔊</button>
+                </div>
               </div>
             </div>
           ))}
@@ -170,7 +174,10 @@ export default function Manifesto() {
         <div className="card" style={{ background: 'linear-gradient(135deg, rgba(124,106,247,0.06), rgba(167,139,250,0.04))' }}>
           <div className="flex items-center justify-between" style={{ marginBottom: '1rem' }}>
             <h3 className="fw-bold">📜 Le Manifeste</h3>
-            <span className="badge badge-accent">IA Generated</span>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <button onClick={() => speak(manifesto)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', opacity: 0.7 }} title="Écouter le manifeste">🔊</button>
+              <span className="badge badge-accent">IA Generated</span>
+            </div>
           </div>
           <p className="manifesto-text">{manifesto}</p>
         </div>
