@@ -19,6 +19,7 @@ export default function Debate() {
   const [speakerIndex, setSpeakerIndex] = useState(0)
   const [turnStartedAt, setTurnStartedAt] = useState(null)
   const [displayTimer, setDisplayTimer] = useState(0)
+  const lastTurnKeyRef = useRef(null)
 
   const scrollRef      = useRef(null)
   const timerRef       = useRef(null)
@@ -28,8 +29,8 @@ export default function Debate() {
   const loadingRef     = useRef(false)
   const pendingRef     = useRef(false)
   
-  // FIX: Ref miroir pour capturer le texte en temps réel hors du cycle de rendu
   const currentTextRef = useRef('')
+  const roundRef = useRef(1)
 
   const MAX_ROUNDS    = channel?.max_rounds    || 3
   const TURN_DURATION = channel?.turn_duration || 90
@@ -43,7 +44,13 @@ export default function Debate() {
     clearInterval(timerRef.current)
     if (waitingReady || !turnStartedAt) return
 
-    autoSubmitRef.current = false
+    // Crée une clé unique pour ce tour (speaker + timestamp) pour éviter les faux resets
+    const turnKey = `${speakerIndex}-${turnStartedAt}`
+    if (lastTurnKeyRef.current !== turnKey) {
+      lastTurnKeyRef.current = turnKey
+      autoSubmitRef.current = false
+    }
+
     if (isMyTurn) soundMyTurn()
 
     function tick() {
@@ -159,6 +166,7 @@ export default function Debate() {
               setTimeout(() => setRoundAnim(null), 2500)
             }
             setRound(newRound)
+            roundRef.current = newRound
             soundNewRound()
             if (member?.is_host) {
               const now = new Date().toISOString()
@@ -190,6 +198,7 @@ export default function Debate() {
         }
         setWaitingReady(comms.some(c => c.round === maxRound))
         setRound(maxRound)
+        roundRef.current = maxRound
       }
     } finally {
       loadingRef.current = false
@@ -214,7 +223,7 @@ export default function Debate() {
     try {
       await supabase.from('debate_turns').insert({
         channel_id: channel.id, member_id: member.id, member_name: member.name,
-        round, content
+        round: roundRef.current, content
       })
       setCurrentText('')
       currentTextRef.current = ''
@@ -247,8 +256,8 @@ export default function Debate() {
     await supabase.from('round_ready').upsert({ channel_id: channel.id, member_id: member.id, round: maxRound })
   }
 
-  const timerUrgent = displayTimer < 20 && displayTimer > 0
-  const timerExpired = displayTimer === 0
+  const timerUrgent = displayTimer < 20 && displayTimer > 0 && !!turnStartedAt
+  const timerExpired = displayTimer === 0 && !!turnStartedAt
   const feed = []
   for (let r = 1; r <= MAX_ROUNDS; r++) {
     turns.filter(t => t.round === r).forEach(t => feed.push({ type: 'turn', data: t }))
