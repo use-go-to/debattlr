@@ -17,7 +17,7 @@ const THEMES = [
 ]
 
 const ROUNDS_OPTIONS   = [{ v: 2, l: '2 rounds — Rapide' }, { v: 3, l: '3 rounds — Standard' }, { v: 4, l: '4 rounds — Intense' }, { v: 5, l: '5 rounds — Marathon' }]
-const DURATION_OPTIONS = [{ v: 60, l: '1 min — Express' }, { v: 90, l: '1m30 — Standard' }, { v: 120, l: '2 min — Réfléchi' }, { v: 180, l: '3 min — Approfondi' }]
+const DURATION_OPTIONS = [{ v: 210, l: '3m30 — Express' }, { v: 300, l: '5 min — Standard' }, { v: 420, l: '7 min — Réfléchi' }, { v: 540, l: '9 min — Approfondi' }]
 const CHARS_OPTIONS    = [{ v: 280, l: '280 car. — Tweet' }, { v: 500, l: '500 car. — Standard' }, { v: 800, l: '800 car. — Détaillé' }]
 const DIFFICULTY_OPTIONS = [
   { v: 'easy',   l: '🟢 Facile',  desc: 'Sujets accessibles, bien connus' },
