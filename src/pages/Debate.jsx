@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/AppContext'
 import { supabase, updateChannelStatus, callGroq } from '../lib/supabase'
+import { soundSubmit, soundMessage, soundMyTurn, soundAI, soundNewRound, soundDebateEnd, soundClick } from '../lib/sounds'
 
 export default function Debate() {
   const navigate = useNavigate()
@@ -43,6 +44,7 @@ export default function Debate() {
     if (waitingReady || !turnStartedAt) return
 
     autoSubmitRef.current = false
+    if (isMyTurn) soundMyTurn()
 
     function tick() {
       const elapsed = Math.floor((Date.now() - new Date(turnStartedAt).getTime()) / 1000)
@@ -138,6 +140,10 @@ export default function Debate() {
     const dbIndex     = chData?.current_speaker_index ?? 0
     const dbStartedAt = chData?.turn_started_at ?? null
 
+    // Sons : nouveau message ou nouveau commentaire IA
+    if (data.length > turns.length) soundMessage()
+    if (comms.length > commentaries.length) soundAI()
+
     setSpeakerIndex(dbIndex)
     setTurnStartedAt(dbStartedAt)
     setTurns(data)
@@ -170,6 +176,7 @@ export default function Debate() {
             setTimeout(() => setRoundAnim(null), 2500)
           }
           setRound(newRound)
+          soundNewRound()
           if (member?.is_host) {
             const now = new Date().toISOString()
             await supabase.from('channels').update({ current_speaker_index: 0, turn_started_at: now }).eq('id', channel.id)
@@ -178,6 +185,7 @@ export default function Debate() {
           }
         } else if (allReady && maxRound >= MAX_ROUNDS) {
           setWaitingReady(false)
+          soundDebateEnd()
           if (member?.is_host) await updateChannelStatus(channel.id, 'ai_summary')
         } else {
           setWaitingReady(true)
@@ -418,7 +426,8 @@ export default function Debate() {
             <div className="flex items-center justify-between" style={{ marginTop: '0.5rem', gap: '0.5rem' }}>
               <span className="text-xs text-muted">{currentText.length}/{MAX_CHARS}</span>
               <button className="btn btn-primary" style={{ width: 'auto', padding: '0.6rem 1.25rem' }}
-                onClick={handleSubmit} disabled={submitting || !currentText.trim()}>
+                onClick={handleSubmit} disabled={submitting || !currentText.trim()}
+                onMouseDown={soundClick}>
                 {submitting ? '…' : 'Soumettre →'}
               </button>
             </div>
@@ -433,7 +442,7 @@ export default function Debate() {
                 ? <><div className="spinner" style={{ margin: '0 auto' }} /><p className="text-muted text-sm">📺 Le commentateur analyse le round…</p></>
                 : <>
                     <p className="text-sm" style={{ color: 'var(--text)' }}>📺 Lis le commentaire avant de continuer</p>
-                    <button className="btn btn-primary" onClick={handleReady} disabled={iAmReady}>
+                    <button className="btn btn-primary" onClick={handleReady} disabled={iAmReady} onMouseDown={soundClick}>
                       {iAmReady ? `✅ Prêt (${readyCount}/${members.length})` : '✅ Je suis prêt pour le round suivant'}
                     </button>
                   </>
