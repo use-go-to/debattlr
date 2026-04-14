@@ -137,26 +137,61 @@ export function soundDebateEnd() {
 // ── Text-to-Speech (Web Speech API) ─────────────────────────────────────────
 
 let activeSpeech = null
+let resumeTimer = null
 
-export function speak(text) {
-  if (!window.speechSynthesis) return
-  // Si déjà en train de lire le même texte → stop (toggle)
-  if (activeSpeech && activeSpeech === text && window.speechSynthesis.speaking) {
-    window.speechSynthesis.cancel()
-    activeSpeech = null
-    return
-  }
+function getBestFrVoice() {
+  const voices = window.speechSynthesis.getVoices()
+  return (
+    voices.find(v => v.lang === 'fr-FR' && v.localService) ||
+    voices.find(v => v.lang === 'fr-FR') ||
+    voices.find(v => v.lang.startsWith('fr')) ||
+    null
+  )
+}
+
+function doSpeak(text) {
   window.speechSynthesis.cancel()
+  clearInterval(resumeTimer)
+
   const utter = new SpeechSynthesisUtterance(text)
   utter.lang = 'fr-FR'
   utter.rate = 1.05
-  utter.onend = () => { activeSpeech = null }
+  const voice = getBestFrVoice()
+  if (voice) utter.voice = voice
+
+  // Workaround bug iOS + Android PWA : speechSynthesis se coupe sur les longs textes
+  resumeTimer = setInterval(() => {
+    if (!window.speechSynthesis.speaking) { clearInterval(resumeTimer); return }
+    window.speechSynthesis.pause()
+    window.speechSynthesis.resume()
+  }, 10000)
+
+  utter.onend = () => { activeSpeech = null; clearInterval(resumeTimer) }
+  utter.onerror = () => { activeSpeech = null; clearInterval(resumeTimer) }
   activeSpeech = text
   window.speechSynthesis.speak(utter)
 }
 
-export function isSpeaking() {
-  return window.speechSynthesis?.speaking ?? false
+function waitForVoicesThenSpeak(text, attempts = 0) {
+  const voices = window.speechSynthesis.getVoices()
+  if (voices.length > 0 || attempts >= 20) {
+    doSpeak(text)
+    return
+  }
+  // Polling 50ms — fiable sur Android Chrome où onvoiceschanged ne se déclenche pas
+  setTimeout(() => waitForVoicesThenSpeak(text, attempts + 1), 50)
+}
+
+export function speak(text) {
+  if (!window.speechSynthesis) return
+  // Toggle : même texte en cours → stop
+  if (activeSpeech === text && window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel()
+    clearInterval(resumeTimer)
+    activeSpeech = null
+    return
+  }
+  waitForVoicesThenSpeak(text)
 }
 
 // Vote enregistré — petit ding
