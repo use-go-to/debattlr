@@ -2,36 +2,35 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/AppContext'
-import { supabase, submitDebateTurn, getDebateTurns, updateChannelStatus, callGroq } from '../lib/supabase'
-
-  const MAX_ROUNDS    = channel?.max_rounds    || 3
-  const TURN_DURATION = channel?.turn_duration || 90
-  const MAX_CHARS     = channel?.max_chars     || 500
+import { supabase, submitDebateTurn, updateChannelStatus, callGroq } from '../lib/supabase'
 
 export default function Debate() {
   const navigate = useNavigate()
   const { channel, member, members, showToast } = useApp()
   const [turns, setTurns]               = useState([])
-  const [commentaries, setCommentaries] = useState([]) // { round, content }
-  const [readyList, setReadyList]       = useState([]) // { member_id, round }
+  const [commentaries, setCommentaries] = useState([])
+  const [readyList, setReadyList]       = useState([])
   const [currentText, setCurrentText]   = useState('')
   const [rebuttalTo, setRebuttalTo]     = useState(null)
-  const [timer, setTimer]               = useState(TURN_DURATION)
+  const [timer, setTimer]               = useState(90)
   const [submitting, setSubmitting]     = useState(false)
   const [round, setRound]               = useState(1)
   const [roundAnim, setRoundAnim]       = useState(null)
   const [generatingCommentary, setGeneratingCommentary] = useState(false)
-  const [waitingReady, setWaitingReady] = useState(false) // bloque entre rounds
+  const [waitingReady, setWaitingReady] = useState(false)
   const scrollRef  = useRef(null)
   const timerRef   = useRef(null)
   const prevRound  = useRef(1)
+
+  const MAX_ROUNDS    = channel?.max_rounds    || 3
+  const TURN_DURATION = channel?.turn_duration || 90
+  const MAX_CHARS     = channel?.max_chars     || 500
 
   useEffect(() => {
     if (!channel) { navigate('/', { replace: true }); return }
     if (channel.status === 'ai_summary') { navigate('/summary', { replace: true }); return }
   }, [channel])
 
-  // Polling fallback
   useEffect(() => {
     if (!channel) return
     const interval = setInterval(async () => {
@@ -41,7 +40,6 @@ export default function Debate() {
     return () => clearInterval(interval)
   }, [channel?.id])
 
-  // Subscribe to new turns
   useEffect(() => {
     if (!channel) return
     loadAll()
@@ -69,11 +67,11 @@ export default function Debate() {
 
   function scrollToBottom() {
     setTimeout(() => {
-      if (scrollRef.current) {
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-      }
+      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }, 50)
   }
+
+  async function loadAll() {
     const [turnsRes, commRes, membersRes, readyRes] = await Promise.all([
       supabase.from('debate_turns').select('*').eq('channel_id', channel.id).order('submitted_at'),
       supabase.from('round_commentaries').select('*').eq('channel_id', channel.id).order('round'),
@@ -93,6 +91,7 @@ export default function Debate() {
 
     if (memberCount === 0) return
 
+    const maxRounds    = channel?.max_rounds || 3
     const maxRound     = data.length > 0 ? Math.max(...data.map(t => t.round)) : 1
     const roundTurns   = data.filter(t => t.round === maxRound)
     const allSubmitted = roundTurns.length >= memberCount
@@ -100,17 +99,16 @@ export default function Debate() {
     if (allSubmitted) {
       const commentaryExists = comms.some(c => c.round === maxRound)
 
-      // Générer le commentaire si pas encore fait
       if (!commentaryExists && member?.is_host && !generatingCommentary) {
         await generateCommentary(maxRound, roundTurns)
-        return // loadAll sera rappelé via realtime après l'insert
+        return
       }
 
       if (commentaryExists) {
         const readyThisRound = ready.filter(r => r.round === maxRound)
         const allReady = readyThisRound.length >= memberCount
 
-        if (allReady && maxRound < MAX_ROUNDS) {
+        if (allReady && maxRound < maxRounds) {
           const newRound = maxRound + 1
           setWaitingReady(false)
           if (newRound !== prevRound.current) {
@@ -119,7 +117,7 @@ export default function Debate() {
             setTimeout(() => setRoundAnim(null), 2500)
           }
           setRound(newRound)
-        } else if (allReady && maxRound >= MAX_ROUNDS) {
+        } else if (allReady && maxRound >= maxRounds) {
           setWaitingReady(false)
           if (member?.is_host) await updateChannelStatus(channel.id, 'ai_summary')
         } else {
@@ -147,11 +145,8 @@ export default function Debate() {
         round: roundNum,
         turns: roundTurns.map(t => ({ name: t.member_name, content: t.content }))
       })
-      const text = res?.result || ''
       await supabase.from('round_commentaries').insert({
-        channel_id: channel.id,
-        round: roundNum,
-        content: text
+        channel_id: channel.id, round: roundNum, content: res?.result || ''
       })
     } catch (e) {
       console.error('Commentary error', e)
@@ -173,14 +168,12 @@ export default function Debate() {
       })
     }, 1000)
     return () => clearInterval(timerRef.current)
-  }, [round, isMyTurn])
+  }, [round, isMyTurn, TURN_DURATION])
 
   async function handleReady() {
     const maxRound = turns.length > 0 ? Math.max(...turns.map(t => t.round)) : 1
     await supabase.from('round_ready').upsert({
-      channel_id: channel.id,
-      member_id: member.id,
-      round: maxRound
+      channel_id: channel.id, member_id: member.id, round: maxRound
     })
   }
 
@@ -190,7 +183,10 @@ export default function Debate() {
     setSubmitting(true)
     clearInterval(timerRef.current)
     try {
-      await submitDebateTurn(channel.id, member.id, member.name, round, currentText.trim(), rebuttalTo)
+      await supabase.from('debate_turns').insert({
+        channel_id: channel.id, member_id: member.id, member_name: member.name,
+        round, content: currentText.trim(), rebuttal_to: rebuttalTo || null
+      })
       setCurrentText('')
       setRebuttalTo(null)
       showToast('Argument soumis ✅')
@@ -204,11 +200,9 @@ export default function Debate() {
   const timerUrgent  = timer < 20 && timer > 0
   const timerExpired = timer === 0
 
-  // Construit le fil chronologique : turns + commentaires intercalés
   const feed = []
   for (let r = 1; r <= MAX_ROUNDS; r++) {
-    const roundTurns = turns.filter(t => t.round === r)
-    roundTurns.forEach(t => feed.push({ type: 'turn', data: t }))
+    turns.filter(t => t.round === r).forEach(t => feed.push({ type: 'turn', data: t }))
     const comm = commentaries.find(c => c.round === r)
     if (comm) feed.push({ type: 'commentary', data: comm })
     else if (generatingCommentary && r === round - 1) feed.push({ type: 'loading', round: r })
@@ -219,43 +213,29 @@ export default function Debate() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', position: 'fixed', width: '100%', top: 0, left: 0 }}>
 
-      {/* Animation Round */}
       {roundAnim && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 999,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(15,15,26,0.92)', animation: 'fadeInOut 2.5s ease forwards'
-        }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15,15,26,0.92)', animation: 'fadeInOut 2.5s ease forwards' }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '1rem', color: 'var(--accent)', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-              ⚔️ Nouveau tour
-            </div>
-            <div style={{ fontSize: '5rem', fontWeight: 900, color: 'var(--text)', lineHeight: 1 }}>
-              Round {roundAnim}
-            </div>
+            <div style={{ fontSize: '1rem', color: 'var(--accent)', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>⚔️ Nouveau tour</div>
+            <div style={{ fontSize: '5rem', fontWeight: 900, color: 'var(--text)', lineHeight: 1 }}>Round {roundAnim}</div>
           </div>
         </div>
       )}
 
-      {/* Header */}
-      <div style={{ padding: '1rem 1.25rem', background: 'var(--bg2)', borderBottom: '1px solid var(--border)' }}>
+      {/* Header fixe */}
+      <div style={{ padding: '0.75rem 1.25rem', background: 'var(--bg2)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <div className="flex items-center justify-between">
-          <div>
+          <div style={{ flex: 1, marginRight: '0.75rem' }}>
             <div className="badge badge-accent" style={{ marginBottom: '0.25rem' }}>⚔️ Débat</div>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text2)', maxWidth: 260, lineHeight: 1.3 }}>{channel.topic}</p>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text)', lineHeight: 1.3, fontWeight: 600 }}>{channel.topic}</p>
           </div>
-          <div style={{ textAlign: 'right' }}>
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
             <div className="badge badge-warn">Tour {Math.min(round, MAX_ROUNDS)}/{MAX_ROUNDS}</div>
             <div className="flex items-center justify-center gap-1" style={{ marginTop: '0.3rem' }}>
               {members.map(m => {
                 const hasTurn = turns.some(t => t.member_id === m.id && t.round === round)
                 return (
-                  <div key={m.id} style={{
-                    width: 24, height: 24, borderRadius: '50%',
-                    background: hasTurn ? 'var(--success)' : 'var(--border)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '0.6rem', fontWeight: 700, color: 'var(--bg)', transition: 'background 0.3s'
-                  }}>{m.name[0]}</div>
+                  <div key={m.id} style={{ width: 24, height: 24, borderRadius: '50%', background: hasTurn ? 'var(--success)' : 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 700, color: 'var(--bg)', transition: 'background 0.3s' }}>{m.name[0]}</div>
                 )
               })}
             </div>
@@ -263,7 +243,7 @@ export default function Debate() {
         </div>
       </div>
 
-      {/* Feed */}
+      {/* Feed scrollable */}
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         {feed.length === 0 && (
           <div style={{ textAlign: 'center', padding: '3rem 0' }}>
@@ -271,10 +251,9 @@ export default function Debate() {
             <p className="text-muted text-sm" style={{ marginTop: '0.5rem' }}>Sois le premier à argumenter !</p>
           </div>
         )}
-
-        {feed.map((item, i) => {
+        {feed.map((item) => {
           if (item.type === 'turn') {
-            const t    = item.data
+            const t = item.data
             const isMe = t.member_id === member?.id
             const parent = t.rebuttal_to ? turns.find(x => x.id === t.rebuttal_to) : null
             return (
@@ -301,7 +280,6 @@ export default function Debate() {
               </div>
             )
           }
-
           if (item.type === 'commentary') {
             return (
               <div key={`comm-${item.data.round}`} style={{ padding: '1rem', background: 'rgba(124,106,247,0.08)', borderRadius: 'var(--radius)', border: '1px solid var(--accent)' }}>
@@ -312,7 +290,6 @@ export default function Debate() {
               </div>
             )
           }
-
           if (item.type === 'loading') {
             return (
               <div key={`loading-${item.round}`} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem', background: 'rgba(124,106,247,0.08)', borderRadius: 'var(--radius)', border: '1px solid var(--accent)' }}>
@@ -328,8 +305,8 @@ export default function Debate() {
         })}
       </div>
 
-      {/* Input */}
-      <div style={{ background: 'var(--bg2)', borderTop: '1px solid var(--border)', padding: '1rem 1.25rem', paddingBottom: 'calc(var(--safe-bottom) + 1rem)' }}>
+      {/* Input fixe en bas */}
+      <div style={{ background: 'var(--bg2)', borderTop: '1px solid var(--border)', padding: '0.75rem 1.25rem', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)', flexShrink: 0 }}>
         {rebuttalTo && (
           <div style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid var(--warn)', borderRadius: 'var(--radius-sm)', padding: '0.5rem 0.75rem', marginBottom: '0.5rem', fontSize: '0.8rem', color: 'var(--warn)', display: 'flex', justifyContent: 'space-between' }}>
             <span>↩️ Mode réfutation activé</span>
@@ -345,7 +322,7 @@ export default function Debate() {
                 {timerExpired ? '⏰ Temps écoulé' : `${Math.floor(timer / 60)}:${String(timer % 60).padStart(2, '0')}`}
               </span>
             </div>
-              <div className="progress-bar" style={{ marginBottom: '0.5rem' }}>
+            <div className="progress-bar" style={{ marginBottom: '0.5rem' }}>
               <div className="progress-fill" style={{ width: `${(timer / TURN_DURATION) * 100}%`, background: timerUrgent ? 'var(--danger)' : undefined }} />
             </div>
             <textarea className="input" placeholder={rebuttalTo ? 'Réfute cet argument…' : 'Exprime ton argument…'}
@@ -368,7 +345,7 @@ export default function Debate() {
               {generatingCommentary
                 ? <><div className="spinner" style={{ margin: '0 auto' }} /><p className="text-muted text-sm">📺 Le commentateur analyse le round…</p></>
                 : <>
-                    <p className="text-sm" style={{ color: 'var(--text)' }}>📺 Lis le commentaire du journaliste avant de continuer</p>
+                    <p className="text-sm" style={{ color: 'var(--text)' }}>📺 Lis le commentaire avant de continuer</p>
                     <button className="btn btn-primary" onClick={handleReady} disabled={iAmReady}>
                       {iAmReady ? `✅ Prêt (${readyCount}/${members.length})` : '✅ Je suis prêt pour le round suivant'}
                     </button>
