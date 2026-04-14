@@ -4,26 +4,37 @@ import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/AppContext'
 import { supabase, submitDebateTurn, getDebateTurns, updateChannelStatus } from '../lib/supabase'
 
-const TURN_DURATION = 90  // seconds per turn
-const MAX_ROUNDS    = 3   // each member speaks this many times
+const TURN_DURATION = 90
+const MAX_ROUNDS    = 3
 
 export default function Debate() {
   const navigate = useNavigate()
   const { channel, member, members, showToast } = useApp()
-  const [turns, setTurns]         = useState([])
+  const [turns, setTurns]             = useState([])
   const [currentText, setCurrentText] = useState('')
   const [rebuttalTo, setRebuttalTo]   = useState(null)
   const [timer, setTimer]             = useState(TURN_DURATION)
-  const [phase, setPhase]             = useState('debate') // debate | done
   const [submitting, setSubmitting]   = useState(false)
   const [round, setRound]             = useState(1)
+  const [roundAnim, setRoundAnim]     = useState(null) // affiche "Round X"
   const scrollRef = useRef(null)
   const timerRef  = useRef(null)
+  const prevRound = useRef(1)
 
   useEffect(() => {
     if (!channel) { navigate('/', { replace: true }); return }
     if (channel.status === 'ai_summary') { navigate('/summary', { replace: true }); return }
   }, [channel])
+
+  // Polling fallback pour avancer le round et détecter ai_summary
+  useEffect(() => {
+    if (!channel) return
+    const interval = setInterval(async () => {
+      const { data } = await supabase.from('channels').select('status').eq('id', channel.id).single()
+      if (data?.status === 'ai_summary') navigate('/summary', { replace: true })
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [channel?.id])
 
   useEffect(() => {
     if (!channel) return
@@ -39,30 +50,41 @@ export default function Debate() {
   async function loadTurns() {
     const data = await getDebateTurns(channel.id)
     setTurns(data)
-    // determine current round from turns count
-    const maxRound = Math.max(1, ...data.map(t => t.round))
-    setRound(maxRound)
+    const maxRound = data.length > 0 ? Math.max(...data.map(t => t.round)) : 1
+    // Calcule le round actuel : si tous ont soumis pour maxRound → round suivant
+    const roundTurns = data.filter(t => t.round === maxRound)
+    const newRound = roundTurns.length >= members.length && members.length > 0
+      ? Math.min(maxRound + 1, MAX_ROUNDS + 1)
+      : maxRound
+
+    if (newRound !== prevRound.current && newRound <= MAX_ROUNDS) {
+      setRoundAnim(newRound)
+      setTimeout(() => setRoundAnim(null), 2500)
+    }
+    prevRound.current = newRound
+    setRound(newRound)
     scrollRef.current?.scrollTo({ top: 9999, behavior: 'smooth' })
+
+    // Fin du débat
+    if (newRound > MAX_ROUNDS && member?.is_host) {
+      await updateChannelStatus(channel.id, 'ai_summary')
+    }
   }
 
-  // Timer: reset when it's my turn
   const myTurnsThisRound = turns.filter(t => t.member_id === member?.id && t.round === round).length
-  const isMyTurn = myTurnsThisRound === 0 // simple: each member submits once per round
+  const isMyTurn = myTurnsThisRound === 0 && round <= MAX_ROUNDS
 
   useEffect(() => {
-    if (!isMyTurn || phase !== 'debate') return
+    if (!isMyTurn) return
     setTimer(TURN_DURATION)
     timerRef.current = setInterval(() => {
       setTimer(prev => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current)
-          return 0
-        }
+        if (prev <= 1) { clearInterval(timerRef.current); return 0 }
         return prev - 1
       })
     }, 1000)
     return () => clearInterval(timerRef.current)
-  }, [round, isMyTurn, phase])
+  }, [round, isMyTurn])
 
   async function handleSubmit() {
     if (!currentText.trim()) return showToast('Écris quelque chose !')
@@ -74,17 +96,7 @@ export default function Debate() {
       setCurrentText('')
       setRebuttalTo(null)
       showToast('Argument soumis ✅')
-      // Check if everyone submitted for this round
-      const updated = await getDebateTurns(channel.id)
-      const roundTurns = updated.filter(t => t.round === round)
-      if (roundTurns.length >= members.length) {
-        if (round >= MAX_ROUNDS) {
-          // End debate
-          if (member?.is_host) await updateChannelStatus(channel.id, 'ai_summary')
-        } else {
-          setRound(r => r + 1)
-        }
-      }
+      await loadTurns()
     } catch (e) {
       showToast('Erreur : ' + e.message)
     } finally {
@@ -92,18 +104,32 @@ export default function Debate() {
     }
   }
 
-  async function handleEndDebate() {
-    if (!member?.is_host) return
-    await updateChannelStatus(channel.id, 'ai_summary')
-  }
-
-  const timerUrgent = timer < 20 && timer > 0
+  const timerUrgent  = timer < 20 && timer > 0
   const timerExpired = timer === 0
 
   if (!channel) return null
 
   return (
     <div className="page" style={{ padding: '0', gap: 0 }}>
+
+      {/* Animation Round */}
+      {roundAnim && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(15,15,26,0.92)', animation: 'fadeInOut 2.5s ease forwards'
+        }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '1rem', color: 'var(--accent)', letterSpacing: '0.3em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+              ⚔️ Nouveau tour
+            </div>
+            <div style={{ fontSize: '5rem', fontWeight: 900, color: 'var(--text)', lineHeight: 1 }}>
+              Round {roundAnim}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ padding: '1rem 1.25rem', background: 'var(--bg2)', borderBottom: '1px solid var(--border)' }}>
         <div className="flex items-center justify-between">
@@ -114,7 +140,7 @@ export default function Debate() {
             </p>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div className="badge badge-warn">Tour {round}/{MAX_ROUNDS}</div>
+            <div className="badge badge-warn">Tour {Math.min(round, MAX_ROUNDS)}/{MAX_ROUNDS}</div>
             <div className="flex items-center justify-center gap-1" style={{ marginTop: '0.3rem' }}>
               {members.map(m => {
                 const hasTurn = turns.some(t => t.member_id === m.id && t.round === round)
@@ -123,8 +149,7 @@ export default function Debate() {
                     width: 24, height: 24, borderRadius: '50%',
                     background: hasTurn ? 'var(--success)' : 'var(--border)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '0.6rem', fontWeight: 700, color: 'var(--bg)',
-                    transition: 'background 0.3s'
+                    fontSize: '0.6rem', fontWeight: 700, color: 'var(--bg)', transition: 'background 0.3s'
                   }}>
                     {m.name[0]}
                   </div>
@@ -155,9 +180,7 @@ export default function Debate() {
               )}
               <div className={`turn-bubble ${isMe ? 'mine' : ''} ${t.rebuttal_to ? 'rebuttal' : ''}`}>
                 <div className="turn-meta">
-                  <div className="avatar" style={{ width: 22, height: 22, fontSize: '0.7rem' }}>
-                    {t.member_name[0]}
-                  </div>
+                  <div className="avatar" style={{ width: 22, height: 22, fontSize: '0.7rem' }}>{t.member_name[0]}</div>
                   <strong>{t.member_name}</strong>
                   <span className="badge badge-accent" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>T{t.round}</span>
                   {!isMe && (
@@ -186,7 +209,6 @@ export default function Debate() {
 
         {isMyTurn ? (
           <>
-            {/* Timer */}
             <div className="flex items-center justify-between" style={{ marginBottom: '0.5rem' }}>
               <span className="text-xs text-muted">Ton tour</span>
               <span className={`timer ${timerUrgent ? 'urgent' : ''}`} style={{ fontSize: '1.2rem' }}>
@@ -196,7 +218,7 @@ export default function Debate() {
             <div className="progress-bar" style={{ marginBottom: '0.5rem' }}>
               <div className="progress-fill" style={{ width: `${(timer / TURN_DURATION) * 100}%`, background: timerUrgent ? 'var(--danger)' : undefined }} />
             </div>
-            <textarea className="input" placeholder={rebuttalTo ? "Réfute cet argument…" : "Exprime ton argument…"}
+            <textarea className="input" placeholder={rebuttalTo ? 'Réfute cet argument…' : 'Exprime ton argument…'}
               value={currentText} onChange={e => setCurrentText(e.target.value)}
               rows={3} maxLength={500} />
             <div className="flex items-center justify-between" style={{ marginTop: '0.5rem', gap: '0.5rem' }}>
@@ -216,11 +238,20 @@ export default function Debate() {
 
         {member?.is_host && (
           <button className="btn btn-danger" style={{ marginTop: '0.75rem', padding: '0.6rem', fontSize: '0.85rem' }}
-            onClick={handleEndDebate}>
+            onClick={() => updateChannelStatus(channel.id, 'ai_summary')}>
             🏁 Terminer le débat maintenant
           </button>
         )}
       </div>
+
+      <style>{`
+        @keyframes fadeInOut {
+          0%   { opacity: 0; transform: scale(0.8); }
+          20%  { opacity: 1; transform: scale(1); }
+          80%  { opacity: 1; transform: scale(1); }
+          100% { opacity: 0; transform: scale(1.1); }
+        }
+      `}</style>
     </div>
   )
 }
