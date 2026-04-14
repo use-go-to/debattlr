@@ -18,7 +18,9 @@ export default function PeerVote() {
   const [allVotes, setAllVotes]     = useState([])
   const [submitted, setSubmitted]   = useState(false)
   const [loading, setLoading]       = useState(false)
-  const [memberCount, setMemberCount] = useState(members.length)
+  const [memberCount, setMemberCount] = useState(0)
+
+  const skipVote = memberCount > 0 && memberCount <= 2
 
   useEffect(() => {
     if (!channel) { navigate('/', { replace: true }); return }
@@ -88,7 +90,11 @@ export default function PeerVote() {
   const skipVote      = memberCount <= 2
   const allSubmitted  = totalVoters >= memberCount
 
-  if (!channel) return null
+  if (!channel || memberCount === 0) return (
+    <div className="page" style={{ justifyContent: 'center', alignItems: 'center' }}>
+      <div className="spinner" />
+    </div>
+  )
 
   // 2 joueurs — skip le vote, hôte passe directement
   if (skipVote) {
