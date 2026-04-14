@@ -15,6 +15,10 @@ const THEMES = [
   '🌐 Mondialisation',
 ]
 
+const ROUNDS_OPTIONS   = [{ v: 2, l: '2 rounds — Rapide' }, { v: 3, l: '3 rounds — Standard' }, { v: 4, l: '4 rounds — Intense' }, { v: 5, l: '5 rounds — Marathon' }]
+const DURATION_OPTIONS = [{ v: 60, l: '1 min — Express' }, { v: 90, l: '1m30 — Standard' }, { v: 120, l: '2 min — Réfléchi' }, { v: 180, l: '3 min — Approfondi' }]
+const CHARS_OPTIONS    = [{ v: 280, l: '280 car. — Tweet' }, { v: 500, l: '500 car. — Standard' }, { v: 800, l: '800 car. — Détaillé' }]
+
 export default function Home() {
   const navigate = useNavigate()
   const { setChannel, setMember, showToast } = useApp()
@@ -25,6 +29,9 @@ export default function Home() {
   const [code, setCode]         = useState('')
   const [loading, setLoading]   = useState(false)
   const [step, setStep]         = useState(1)         // multi-step for create
+  const [maxRounds, setMaxRounds]       = useState(3)
+  const [turnDuration, setTurnDuration] = useState(90)
+  const [maxChars, setMaxChars]         = useState(500)
 
   const finalTheme = theme === 'custom' ? customTheme : theme
 
@@ -33,7 +40,7 @@ export default function Home() {
     if (!finalTheme.trim()) return showToast('Choisis un thème')
     setLoading(true)
     try {
-      const { channel, member } = await createChannel(name.trim(), finalTheme)
+      const { channel, member } = await createChannel(name.trim(), finalTheme, maxRounds, turnDuration, maxChars)
       setChannel(channel)
       setMember(member)
       navigate('/lobby')
@@ -92,7 +99,7 @@ export default function Home() {
           <div className="flex items-center justify-between">
             <h2 className="fw-bold" style={{ fontSize: '1.1rem' }}>Nouveau groupe</h2>
             <div className="steps">
-              {[1, 2].map(s => (
+              {[1, 2, 3].map(s => (
                 <div key={s} className={`step-dot ${step === s ? 'active' : step > s ? 'done' : ''}`} />
               ))}
             </div>
@@ -139,11 +146,59 @@ export default function Home() {
                   )}
                 </div>
               </div>
-              <button className="btn btn-primary" disabled={!finalTheme.trim() || loading}
-                onClick={handleCreate}>
-                {loading ? <span className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /> : '🚀 Créer le groupe'}
+              <button className="btn btn-primary" disabled={!finalTheme.trim()}
+                onClick={() => setStep(3)}>
+                Continuer →
               </button>
               <button className="btn btn-secondary" onClick={() => setStep(1)}>← Retour</button>
+            </>
+          )}
+
+          {step === 3 && (
+            <>
+              <div>
+                <label className="label">Nombre de rounds</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {ROUNDS_OPTIONS.map(o => (
+                    <button key={o.v}
+                      className={`btn ${maxRounds === o.v ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ justifyContent: 'flex-start', padding: '0.7rem 1rem', fontSize: '0.9rem' }}
+                      onClick={() => setMaxRounds(o.v)}>
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="label">Temps de parole</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {DURATION_OPTIONS.map(o => (
+                    <button key={o.v}
+                      className={`btn ${turnDuration === o.v ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ justifyContent: 'flex-start', padding: '0.7rem 1rem', fontSize: '0.9rem' }}
+                      onClick={() => setTurnDuration(o.v)}>
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="label">Limite de caractères</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {CHARS_OPTIONS.map(o => (
+                    <button key={o.v}
+                      className={`btn ${maxChars === o.v ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ justifyContent: 'flex-start', padding: '0.7rem 1rem', fontSize: '0.9rem' }}
+                      onClick={() => setMaxChars(o.v)}>
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button className="btn btn-primary" disabled={loading} onClick={handleCreate}>
+                {loading ? <span className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /> : '🚀 Créer le groupe'}
+              </button>
+              <button className="btn btn-secondary" onClick={() => setStep(2)}>← Retour</button>
             </>
           )}
         </div>
