@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/AppContext'
 import { createChannel, joinChannel } from '../lib/supabase'
+import { soundClick, soundClickPrimary, soundSubmit } from '../lib/sounds'
 
 const THEMES = [
   '🌍 Environnement & Climat',
@@ -86,10 +87,12 @@ export default function Home() {
       {!mode && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <button className="btn btn-primary" style={{ fontSize: '1.1rem', padding: '1.1rem' }}
+            onMouseDown={soundClickPrimary}
             onClick={() => setMode('create')}>
             ✨ Créer un groupe
           </button>
           <button className="btn btn-secondary" style={{ fontSize: '1.1rem', padding: '1.1rem' }}
+            onMouseDown={soundClick}
             onClick={() => setMode('join')}>
             🔗 Rejoindre avec un code
           </button>
@@ -120,6 +123,7 @@ export default function Home() {
                   maxLength={20} autoFocus />
               </div>
               <button className="btn btn-primary" disabled={!name.trim()}
+                onMouseDown={soundClick}
                 onClick={() => setStep(2)}>
                 Continuer →
               </button>
@@ -153,10 +157,11 @@ export default function Home() {
                 </div>
               </div>
               <button className="btn btn-primary" disabled={!finalTheme.trim()}
+                onMouseDown={soundClick}
                 onClick={() => setStep(3)}>
                 Continuer →
               </button>
-              <button className="btn btn-secondary" onClick={() => setStep(1)}>← Retour</button>
+              <button className="btn btn-secondary" onMouseDown={soundClick} onClick={() => setStep(1)}>← Retour</button>
             </>
           )}
 
@@ -176,8 +181,8 @@ export default function Home() {
                   ))}
                 </div>
               </div>
-              <button className="btn btn-primary" onClick={() => setStep(4)}>Continuer →</button>
-              <button className="btn btn-secondary" onClick={() => setStep(2)}>← Retour</button>
+              <button className="btn btn-primary" onMouseDown={soundClick} onClick={() => setStep(4)}>Continuer →</button>
+              <button className="btn btn-secondary" onMouseDown={soundClick} onClick={() => setStep(2)}>← Retour</button>
             </>
           )}
 
@@ -222,10 +227,10 @@ export default function Home() {
                   ))}
                 </div>
               </div>
-              <button className="btn btn-primary" disabled={loading} onClick={handleCreate}>
+              <button className="btn btn-primary" disabled={loading} onMouseDown={soundSubmit} onClick={handleCreate}>
                 {loading ? <span className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /> : '🚀 Créer le groupe'}
               </button>
-              <button className="btn btn-secondary" onClick={() => setStep(3)}>← Retour</button>
+              <button className="btn btn-secondary" onMouseDown={soundClick} onClick={() => setStep(3)}>← Retour</button>
             </>
           )}
         </div>
@@ -248,10 +253,11 @@ export default function Home() {
               maxLength={8} style={{ textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '1.2rem' }} />
           </div>
           <button className="btn btn-primary" disabled={!name.trim() || code.length < 4 || loading}
+            onMouseDown={soundClickPrimary}
             onClick={handleJoin}>
             {loading ? <span className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /> : '🔗 Rejoindre'}
           </button>
-          <button className="btn btn-secondary" onClick={() => setMode(null)}>← Retour</button>
+          <button className="btn btn-secondary" onMouseDown={soundClick} onClick={() => setMode(null)}>← Retour</button>
         </div>
       )}
     </div>
