@@ -12,6 +12,7 @@ export default function Debate() {
   const { channel, member, members, showToast } = useApp()
   const [turns, setTurns]               = useState([])
   const [commentaries, setCommentaries] = useState([]) // { round, content }
+  const [readyList, setReadyList]       = useState([]) // { member_id, round }
   const [currentText, setCurrentText]   = useState('')
   const [rebuttalTo, setRebuttalTo]     = useState(null)
   const [timer, setTimer]               = useState(TURN_DURATION)
@@ -19,6 +20,7 @@ export default function Debate() {
   const [round, setRound]               = useState(1)
   const [roundAnim, setRoundAnim]       = useState(null)
   const [generatingCommentary, setGeneratingCommentary] = useState(false)
+  const [waitingReady, setWaitingReady] = useState(false) // bloque entre rounds
   const scrollRef  = useRef(null)
   const timerRef   = useRef(null)
   const prevRound  = useRef(1)
@@ -47,69 +49,80 @@ export default function Debate() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'debate_turns',
         filter: `channel_id=eq.${channel.id}` }, loadAll)
       .subscribe()
-    // Subscribe to new commentaries
     const commSub = supabase
       .channel(`commentaries:${channel.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'round_commentaries',
         filter: `channel_id=eq.${channel.id}` }, loadAll)
       .subscribe()
+    const readySub = supabase
+      .channel(`ready:${channel.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'round_ready',
+        filter: `channel_id=eq.${channel.id}` }, loadAll)
+      .subscribe()
     return () => {
       supabase.removeChannel(turnSub)
       supabase.removeChannel(commSub)
+      supabase.removeChannel(readySub)
     }
   }, [channel?.id])
 
   async function loadAll() {
-    const [turnsRes, commRes, membersRes] = await Promise.all([
+    const [turnsRes, commRes, membersRes, readyRes] = await Promise.all([
       supabase.from('debate_turns').select('*').eq('channel_id', channel.id).order('submitted_at'),
       supabase.from('round_commentaries').select('*').eq('channel_id', channel.id).order('round'),
-      supabase.from('members').select('id').eq('channel_id', channel.id)
+      supabase.from('members').select('id').eq('channel_id', channel.id),
+      supabase.from('round_ready').select('*').eq('channel_id', channel.id)
     ])
 
     const data        = turnsRes.data || []
     const comms       = commRes.data  || []
+    const ready       = readyRes.data || []
     const memberCount = membersRes.data?.length || members.length
 
     setTurns(data)
     setCommentaries(comms)
+    setReadyList(ready)
     scrollRef.current?.scrollTo({ top: 9999, behavior: 'smooth' })
 
     if (memberCount === 0) return
 
-    const maxRound   = data.length > 0 ? Math.max(...data.map(t => t.round)) : 1
-    const roundTurns = data.filter(t => t.round === maxRound)
+    const maxRound     = data.length > 0 ? Math.max(...data.map(t => t.round)) : 1
+    const roundTurns   = data.filter(t => t.round === maxRound)
     const allSubmitted = roundTurns.length >= memberCount
 
     if (allSubmitted) {
       const commentaryExists = comms.some(c => c.round === maxRound)
-      // Seul l'hôte génère le commentaire
+
+      // Générer le commentaire si pas encore fait
       if (!commentaryExists && member?.is_host && !generatingCommentary) {
-        if (maxRound < MAX_ROUNDS) {
-          // Générer commentaire puis passer au round suivant
-          await generateCommentary(maxRound, roundTurns)
+        await generateCommentary(maxRound, roundTurns)
+        return // loadAll sera rappelé via realtime après l'insert
+      }
+
+      if (commentaryExists) {
+        // Vérifier si tout le monde est prêt pour le round suivant
+        const readyThisRound = ready.filter(r => r.round === maxRound)
+        const allReady = readyThisRound.length >= memberCount
+
+        if (allReady && maxRound < MAX_ROUNDS) {
           const newRound = maxRound + 1
           if (newRound !== prevRound.current) {
             setRoundAnim(newRound)
             setTimeout(() => setRoundAnim(null), 2500)
             prevRound.current = newRound
           }
+          setWaitingReady(false)
           setRound(newRound)
+        } else if (allReady && maxRound >= MAX_ROUNDS) {
+          if (member?.is_host) await updateChannelStatus(channel.id, 'ai_summary')
         } else {
-          // Dernier round — générer commentaire final puis fin du débat
-          await generateCommentary(maxRound, roundTurns)
-          await updateChannelStatus(channel.id, 'ai_summary')
+          // Attendre que tout le monde soit prêt
+          setWaitingReady(true)
+          setRound(maxRound)
         }
-      } else if (commentaryExists) {
-        // Invité : met à jour le round localement
-        const newRound = maxRound < MAX_ROUNDS ? maxRound + 1 : maxRound
-        if (newRound !== prevRound.current && newRound <= MAX_ROUNDS) {
-          setRoundAnim(newRound)
-          setTimeout(() => setRoundAnim(null), 2500)
-          prevRound.current = newRound
-        }
-        setRound(newRound <= MAX_ROUNDS ? newRound : maxRound)
       }
     } else {
+      setWaitingReady(false)
       setRound(maxRound)
     }
   }
@@ -149,6 +162,15 @@ export default function Debate() {
     }, 1000)
     return () => clearInterval(timerRef.current)
   }, [round, isMyTurn])
+
+  async function handleReady() {
+    const maxRound = turns.length > 0 ? Math.max(...turns.map(t => t.round)) : 1
+    await supabase.from('round_ready').upsert({
+      channel_id: channel.id,
+      member_id: member.id,
+      round: maxRound
+    })
+  }
 
   async function handleSubmit() {
     if (!currentText.trim()) return showToast('Écris quelque chose !')
@@ -325,12 +347,27 @@ export default function Debate() {
               </button>
             </div>
           </>
-        ) : (
+        ) : waitingReady ? (() => {
+          const maxRound = turns.length > 0 ? Math.max(...turns.map(t => t.round)) : 1
+          const iAmReady = readyList.some(r => r.member_id === member?.id && r.round === maxRound)
+          const readyCount = readyList.filter(r => r.round === maxRound).length
+          return (
+            <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {generatingCommentary
+                ? <><div className="spinner" style={{ margin: '0 auto' }} /><p className="text-muted text-sm">📺 Le commentateur analyse le round…</p></>
+                : <>
+                    <p className="text-sm" style={{ color: 'var(--text)' }}>📺 Lis le commentaire du journaliste avant de continuer</p>
+                    <button className="btn btn-primary" onClick={handleReady} disabled={iAmReady}>
+                      {iAmReady ? `✅ Prêt (${readyCount}/${members.length})` : '✅ Je suis prêt pour le round suivant'}
+                    </button>
+                  </>
+              }
+            </div>
+          )
+        })() : (
           <div style={{ textAlign: 'center', padding: '0.5rem' }}>
-            {generatingCommentary
-              ? <><div className="spinner" style={{ margin: '0 auto 0.5rem' }} /><p className="text-muted text-sm">📺 Le commentateur analyse le round…</p></>
-              : <><p className="text-muted text-sm">✅ Tu as soumis ton argument pour ce tour</p><p className="text-xs text-muted" style={{ marginTop: '0.25rem' }}>En attente des autres…</p></>
-            }
+            <p className="text-muted text-sm">✅ Tu as soumis ton argument pour ce tour</p>
+            <p className="text-xs text-muted" style={{ marginTop: '0.25rem' }}>En attente des autres…</p>
           </div>
         )}
 
