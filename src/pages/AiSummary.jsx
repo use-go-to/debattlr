@@ -9,6 +9,7 @@ export default function AiSummary() {
   const { channel, member, members, showToast } = useApp()
   const [mySummary, setMySummary]       = useState(null)
   const [allSummaries, setAllSummaries] = useState([])
+  const [readyList, setReadyList]       = useState([])
   const [loading, setLoading]           = useState(false)
   const [analyzed, setAnalyzed]         = useState(false)
   const [memberCount, setMemberCount]   = useState(members.length)
@@ -30,25 +31,41 @@ export default function AiSummary() {
 
   useEffect(() => {
     if (!channel) return
-    loadSummaries()
-    const sub = supabase
+    loadAll()
+    const summarySub = supabase
       .channel(`summaries:${channel.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ai_summaries',
-        filter: `channel_id=eq.${channel.id}` }, loadSummaries)
+        filter: `channel_id=eq.${channel.id}` }, loadAll)
       .subscribe()
-    return () => supabase.removeChannel(sub)
+    const readySub = supabase
+      .channel(`summary_ready:${channel.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'summary_ready',
+        filter: `channel_id=eq.${channel.id}` }, loadAll)
+      .subscribe()
+    return () => {
+      supabase.removeChannel(summarySub)
+      supabase.removeChannel(readySub)
+    }
   }, [channel?.id])
 
-  async function loadSummaries() {
-    const [data, m] = await Promise.all([
+  async function loadAll() {
+    const [summariesRes, readyRes, membersRes] = await Promise.all([
       getAiSummaries(channel.id),
-      supabase.from('members').select('id').eq('channel_id', channel.id)
+      supabase.from('summary_ready').select('*').eq('channel_id', channel.id),
+      supabase.from('members').select('id').eq('channel_id', channel.id),
     ])
-    const count = m.data?.length || members.length
+    const count = membersRes.data?.length || members.length
     setMemberCount(count)
-    setAllSummaries(data)
-    const mine = data.find(s => s.member_id === member?.id)
+    setAllSummaries(summariesRes)
+    setReadyList(readyRes.data || [])
+    const mine = summariesRes.find(s => s.member_id === member?.id)
     if (mine) { setMySummary(mine); setAnalyzed(true) }
+
+    // L'hôte avance automatiquement quand tout le monde est prêt
+    const ready = readyRes.data || []
+    if (ready.length >= count && count > 0 && member?.is_host) {
+      await updateChannelStatus(channel.id, 'peer_vote')
+    }
   }
 
   async function handleAnalyze() {
@@ -79,10 +96,19 @@ export default function AiSummary() {
     }
   }
 
+  async function handleReady() {
+    try {
+      await supabase.from('summary_ready').upsert({ channel_id: channel.id, member_id: member.id })
+    } catch (e) {
+      showToast('Erreur : ' + e.message)
+    }
+  }
+
   if (!channel) return null
 
-  const waiting    = allSummaries.length < memberCount
-  const allDone    = !waiting && memberCount > 0
+  const allAnalyzed = allSummaries.length >= memberCount && memberCount > 0
+  const iAmReady    = readyList.some(r => r.member_id === member?.id)
+  const readyCount  = readyList.length
 
   return (
     <div className="page">
@@ -92,7 +118,7 @@ export default function AiSummary() {
         <p className="text-muted text-sm" style={{ marginTop: '0.25rem' }}>{channel.topic}</p>
       </div>
 
-      {/* Progress */}
+      {/* Progress analyses */}
       <div className="card">
         <div className="flex items-center justify-between" style={{ marginBottom: '0.5rem' }}>
           <span className="text-sm text-muted">Analyses reçues</span>
@@ -103,15 +129,21 @@ export default function AiSummary() {
         </div>
         <div className="flex" style={{ gap: '0.5rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
           {members.map(m => {
-            const done = allSummaries.some(s => s.member_id === m.id)
+            const hasSummary = allSummaries.some(s => s.member_id === m.id)
+            const isReady    = readyList.some(r => r.member_id === m.id)
             return (
               <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem' }}>
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: done ? 'var(--success)' : 'var(--border)' }} />
-                <span style={{ color: done ? 'var(--success)' : 'var(--text2)' }}>{m.name}</span>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: isReady ? 'var(--success)' : hasSummary ? 'var(--warn)' : 'var(--border)' }} />
+                <span style={{ color: isReady ? 'var(--success)' : hasSummary ? 'var(--warn)' : 'var(--text2)' }}>{m.name}</span>
               </div>
             )
           })}
         </div>
+        {allAnalyzed && (
+          <p className="text-xs text-muted" style={{ marginTop: '0.5rem' }}>
+            🟡 analysé · 🟢 prêt à continuer
+          </p>
+        )}
       </div>
 
       {/* Bouton analyser */}
@@ -159,30 +191,33 @@ export default function AiSummary() {
         </div>
       )}
 
-      {/* En attente des autres */}
-      {analyzed && waiting && (
+      {/* En attente que tout le monde ait son analyse */}
+      {analyzed && !allAnalyzed && (
         <div className="card" style={{ textAlign: 'center' }}>
           <div className="spinner" style={{ marginBottom: '0.75rem' }} />
           <p className="text-muted text-sm">En attente des analyses des autres…</p>
         </div>
       )}
 
-      {/* Bouton suivant — visible par tous quand tout le monde a analysé */}
-      {allDone && analyzed && (
+      {/* Bouton continuer — visible par TOUS une fois toutes les analyses reçues */}
+      {allAnalyzed && analyzed && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <div className="badge badge-success" style={{ justifyContent: 'center' }}>
-            ✅ Tout le monde a été analysé
-          </div>
-          {member?.is_host ? (
-            <button className="btn btn-primary" onClick={() => updateChannelStatus(channel.id, 'peer_vote')}>
-              Continuer →
-            </button>
-          ) : (
-            <div className="card" style={{ textAlign: 'center' }}>
-              <div className="spinner" style={{ margin: '0 auto 0.5rem' }} />
-              <p className="text-muted text-sm">⏳ En attente que l'hôte continue…</p>
+          <div className="card" style={{ background: 'rgba(124,106,247,0.06)', borderColor: 'var(--accent)', textAlign: 'center' }}>
+            <div className="flex" style={{ justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+              {members.map(m => {
+                const isReady = readyList.some(r => r.member_id === m.id)
+                return (
+                  <span key={m.id} style={{ fontSize: '0.8rem', color: isReady ? 'var(--success)' : 'var(--text2)' }}>
+                    {isReady ? '✅' : '⏳'} {m.name}
+                  </span>
+                )
+              })}
             </div>
-          )}
+            <p className="text-xs text-muted">{readyCount}/{memberCount} prêts à continuer</p>
+          </div>
+          <button className="btn btn-primary" onClick={handleReady} disabled={iAmReady}>
+            {iAmReady ? `✅ Prêt (${readyCount}/${memberCount})` : '✅ J\'ai lu mon analyse — Continuer'}
+          </button>
         </div>
       )}
     </div>
