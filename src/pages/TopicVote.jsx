@@ -11,10 +11,11 @@ export default function TopicVote() {
   const [votes, setVotes]     = useState([])
   const [myVote, setMyVote]   = useState(null)
   const [loading, setLoading] = useState(true)
-  const [tie, setTie]         = useState(false) // égalité détectée
+  const [tie, setTie]         = useState(false)
+  const [memberCount, setMemberCount] = useState(members.length)
 
-  const isHost     = member?.is_host
-  const hostPicks  = members.length <= 2 // hôte choisit directement si ≤2 joueurs
+  const isHost    = member?.is_host
+  const hostPicks = memberCount <= 2
 
   useEffect(() => {
     if (!channel) { navigate('/', { replace: true }); return }
@@ -41,30 +42,31 @@ export default function TopicVote() {
   }, [channel?.id])
 
   async function load() {
-    const [t, v] = await Promise.all([getTopics(channel.id), getTopicVotes(channel.id)])
+    const [t, v, m] = await Promise.all([
+      getTopics(channel.id),
+      getTopicVotes(channel.id),
+      supabase.from('members').select('id').eq('channel_id', channel.id)
+    ])
+    const count = m.data?.length || members.length
+    setMemberCount(count)
     setTopics(t)
     setVotes(v)
     const mine = v.find(vt => vt.member_id === member?.id)
     if (mine) setMyVote(mine.topic_id)
     setLoading(false)
 
-    if (!hostPicks && v.length >= members.length && members.length > 0) {
-      checkAndAdvance(t, v)
+    if (count > 2 && v.length >= count && count > 0) {
+      checkAndAdvance(t, v, count)
     }
   }
 
-  async function checkAndAdvance(t, v) {
+  async function checkAndAdvance(t, v, count) {
     if (!isHost) return
     const counts = {}
     v.forEach(vt => { counts[vt.topic_id] = (counts[vt.topic_id] || 0) + 1 })
     const maxVotes = Math.max(...Object.values(counts))
     const winners  = t.filter(tp => (counts[tp.id] || 0) === maxVotes)
-
-    if (winners.length > 1) {
-      // Égalité — l'hôte tranche
-      setTie(true)
-      return
-    }
+    if (winners.length > 1) { setTie(true); return }
     await updateChannelStatus(channel.id, 'debate', { topic: winners[0].text })
   }
 
@@ -95,7 +97,7 @@ export default function TopicVote() {
   }, [channel?.id])
 
   const totalVotes = votes.length
-  const allVoted   = totalVotes >= members.length && members.length > 0
+  const allVoted   = totalVotes >= memberCount && memberCount > 0
 
   if (loading) return (
     <div className="page" style={{ justifyContent: 'center', alignItems: 'center' }}>
@@ -119,7 +121,7 @@ export default function TopicVote() {
         <div className="card">
           <div className="flex items-center justify-between" style={{ marginBottom: '0.5rem' }}>
             <span className="text-sm text-muted">Votes reçus</span>
-            <span className="badge badge-accent">{totalVotes} / {members.length}</span>
+            <span className="badge badge-accent">{totalVotes} / {memberCount}</span>
           </div>
           <div className="progress-bar">
             <div className="progress-fill" style={{ width: members.length ? `${(totalVotes / members.length) * 100}%` : '0%' }} />
