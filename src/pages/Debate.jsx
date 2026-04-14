@@ -100,32 +100,30 @@ export default function Debate() {
       }
 
       if (commentaryExists) {
-        // Vérifier si tout le monde est prêt pour le round suivant
         const readyThisRound = ready.filter(r => r.round === maxRound)
         const allReady = readyThisRound.length >= memberCount
 
         if (allReady && maxRound < MAX_ROUNDS) {
           const newRound = maxRound + 1
+          setWaitingReady(false)
           if (newRound !== prevRound.current) {
+            prevRound.current = newRound
             setRoundAnim(newRound)
             setTimeout(() => setRoundAnim(null), 2500)
-            prevRound.current = newRound
           }
-          setWaitingReady(false)
           setRound(newRound)
         } else if (allReady && maxRound >= MAX_ROUNDS) {
+          setWaitingReady(false)
           if (member?.is_host) await updateChannelStatus(channel.id, 'ai_summary')
         } else {
-          // Attendre que tout le monde soit prêt
           setWaitingReady(true)
           setRound(maxRound)
         }
       }
     } else {
-      // Round en cours — mais si commentaire existe déjà pour ce round, attendre le ready
-      const commentaryExists = comms.some(c => c.round === maxRound)
-      const roundTurnsSubmitted = data.filter(t => t.round === maxRound).length >= memberCount
-      if (commentaryExists && roundTurnsSubmitted) {
+      const commentaryExistsForCurrent = comms.some(c => c.round === maxRound)
+      const roundComplete = data.filter(t => t.round === maxRound).length >= memberCount
+      if (commentaryExistsForCurrent && roundComplete) {
         setWaitingReady(true)
       } else {
         setWaitingReady(false)
