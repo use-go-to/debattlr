@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getManifestoBySlug } from '../lib/supabase'
+import { speak } from '../lib/sounds'
 
 export default function Public() {
   const { slug } = useParams()
@@ -77,7 +78,10 @@ export default function Public() {
       <div className="card" style={{ background: 'linear-gradient(135deg, rgba(124,106,247,0.06), rgba(167,139,250,0.04))' }}>
         <div className="flex items-center justify-between" style={{ marginBottom: '1rem' }}>
           <h3 className="fw-bold">📜 Le Manifeste</h3>
-          <span className="badge badge-accent">IA Generated</span>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <button onClick={() => speak(data.content)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', opacity: 0.7 }} title="Écouter">🔊</button>
+            <span className="badge badge-accent">IA Generated</span>
+          </div>
         </div>
         <p className="manifesto-text">{data.content}</p>
       </div>
