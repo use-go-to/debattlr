@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/AppContext'
 import { supabase, callGroq, getDebateTurns, saveAiSummary, getAiSummaries, updateChannelStatus } from '../lib/supabase'
+import { speak } from '../lib/sounds'
 
 export default function AiSummary() {
   const navigate = useNavigate()
@@ -166,11 +167,17 @@ export default function AiSummary() {
       {analyzed && mySummary && (
         <div className="card card-glow">
           <div className="badge badge-success" style={{ marginBottom: '0.75rem' }}>✅ Ton analyse</div>
-          <h3 className="fw-bold" style={{ marginBottom: '0.5rem' }}>📝 Position principale</h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+            <h3 className="fw-bold">📝 Position principale</h3>
+            <button onClick={() => speak(mySummary.summary)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', opacity: 0.6 }} title="Écouter">🔊</button>
+          </div>
           <p style={{ fontSize: '0.9rem', lineHeight: 1.6, marginBottom: '1rem', color: 'var(--text)' }}>
             {mySummary.summary}
           </p>
-          <h3 className="fw-bold" style={{ marginBottom: '0.5rem' }}>💬 Avis de l'IA</h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+            <h3 className="fw-bold">💬 Avis de l'IA</h3>
+            <button onClick={() => speak(mySummary.ai_feedback)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', opacity: 0.6 }} title="Écouter">🔊</button>
+          </div>
           <p style={{ fontSize: '0.875rem', lineHeight: 1.6, marginBottom: '1rem', color: 'var(--text2)' }}>
             {mySummary.ai_feedback}
           </p>
