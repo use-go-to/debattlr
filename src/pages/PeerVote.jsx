@@ -87,7 +87,6 @@ export default function PeerVote() {
 
   const otherMembers  = members.filter(m => m.id !== member?.id)
   const totalVoters   = new Set(allVotes.map(v => v.voter_id)).size
-  const skipVote      = memberCount <= 2
   const allSubmitted  = totalVoters >= memberCount
 
   if (!channel || memberCount === 0) return (
