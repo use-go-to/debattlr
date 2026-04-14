@@ -12,14 +12,13 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 // ─── Channel helpers ──────────────────────────────────────────────────────────
 
-export async function createChannel(hostName, theme) {
-  // Generate a unique code via DB function
+export async function createChannel(hostName, theme, maxRounds = 3, turnDuration = 90, maxChars = 500) {
   const { data: codeData } = await supabase.rpc('generate_channel_code')
   const code = codeData
 
   const { data: channel, error } = await supabase
     .from('channels')
-    .insert({ code, host_name: hostName, theme, status: 'lobby' })
+    .insert({ code, host_name: hostName, theme, status: 'lobby', max_rounds: maxRounds, turn_duration: turnDuration, max_chars: maxChars })
     .select()
     .single()
 
@@ -209,11 +208,11 @@ export async function getPeerVotes(channelId) {
 
 // ─── Manifesto helpers ────────────────────────────────────────────────────────
 
-export async function saveManifesto(channelId, content, winnerName) {
+export async function saveManifesto(channelId, content, winnerName, ranking = []) {
   const slug = Math.random().toString(36).slice(2, 10)
   const { error } = await supabase
     .from('manifesto')
-    .upsert({ channel_id: channelId, content, winner_name: winnerName, public_slug: slug })
+    .upsert({ channel_id: channelId, content, winner_name: winnerName, public_slug: slug, ranking })
   if (error) throw error
   return slug
 }
