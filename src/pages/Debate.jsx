@@ -50,10 +50,16 @@ export default function Debate() {
   async function loadTurns() {
     const data = await getDebateTurns(channel.id)
     setTurns(data)
+
+    // Récupère le nombre réel de membres depuis la base
+    const { data: membersData } = await supabase
+      .from('members').select('id').eq('channel_id', channel.id)
+    const memberCount = membersData?.length || members.length
+    if (memberCount === 0) return
+
     const maxRound = data.length > 0 ? Math.max(...data.map(t => t.round)) : 1
-    // Calcule le round actuel : si tous ont soumis pour maxRound → round suivant
     const roundTurns = data.filter(t => t.round === maxRound)
-    const newRound = roundTurns.length >= members.length && members.length > 0
+    const newRound = roundTurns.length >= memberCount
       ? Math.min(maxRound + 1, MAX_ROUNDS + 1)
       : maxRound
 
@@ -65,7 +71,6 @@ export default function Debate() {
     setRound(newRound)
     scrollRef.current?.scrollTo({ top: 9999, behavior: 'smooth' })
 
-    // Fin du débat
     if (newRound > MAX_ROUNDS && member?.is_host) {
       await updateChannelStatus(channel.id, 'ai_summary')
     }
