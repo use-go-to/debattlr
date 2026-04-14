@@ -12,13 +12,13 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 // ─── Channel helpers ──────────────────────────────────────────────────────────
 
-export async function createChannel(hostName, theme, maxRounds = 3, turnDuration = 90, maxChars = 500) {
+export async function createChannel(hostName, theme, maxRounds = 3, turnDuration = 90, maxChars = 500, difficulty = 'medium') {
   const { data: codeData } = await supabase.rpc('generate_channel_code')
   const code = codeData
 
   const { data: channel, error } = await supabase
     .from('channels')
-    .insert({ code, host_name: hostName, theme, status: 'lobby', max_rounds: maxRounds, turn_duration: turnDuration, max_chars: maxChars })
+    .insert({ code, host_name: hostName, theme, status: 'lobby', max_rounds: maxRounds, turn_duration: turnDuration, max_chars: maxChars, difficulty })
     .select()
     .single()
 
