@@ -406,9 +406,29 @@ export default function Debate() {
               <div ref={noteTagsRef} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', maxHeight: 90, overflowY: 'auto', marginBottom: '0.5rem' }}>
                 {noteText.split('\n').filter(l => l.trim()).map((line, i) => {
                   const c = PASTEL_COLORS[i % PASTEL_COLORS.length]
+                  const trimmed = line.trim()
                   return (
-                    <span key={i} style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.text, borderRadius: 20, padding: '0.2rem 0.65rem', fontSize: '0.8rem', lineHeight: 1.4, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                      {line.trim()}
+                    <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: c.bg, border: `1px solid ${c.border}`, color: c.text, borderRadius: 20, padding: '0.2rem 0.5rem 0.2rem 0.65rem', fontSize: '0.8rem', lineHeight: 1.4, wordBreak: 'break-word', cursor: 'pointer' }}
+                      onClick={() => {
+                        const next = currentText ? currentText + ' ' + trimmed : trimmed
+                        setCurrentText(next)
+                        currentTextRef.current = next
+                      }}
+                    >
+                      {trimmed}
+                      <button
+                        onClick={e => {
+                          e.stopPropagation()
+                          const lines = noteText.split('\n')
+                          const filtered = lines.filter((_, idx) => {
+                            let count = -1
+                            for (let j = 0; j <= idx; j++) if (lines[j].trim()) count++
+                            return count !== i
+                          })
+                          saveNote(filtered.join('\n'))
+                        }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: c.text, opacity: 0.6, fontSize: '0.75rem', padding: 0, lineHeight: 1, flexShrink: 0 }}
+                      >×</button>
                     </span>
                   )
                 })}
