@@ -134,6 +134,31 @@ export function soundDebateEnd() {
   })
 }
 
+// ── Text-to-Speech (Web Speech API) ─────────────────────────────────────────
+
+let activeSpeech = null
+
+export function speak(text) {
+  if (!window.speechSynthesis) return
+  // Si déjà en train de lire le même texte → stop (toggle)
+  if (activeSpeech && activeSpeech === text && window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel()
+    activeSpeech = null
+    return
+  }
+  window.speechSynthesis.cancel()
+  const utter = new SpeechSynthesisUtterance(text)
+  utter.lang = 'fr-FR'
+  utter.rate = 1.05
+  utter.onend = () => { activeSpeech = null }
+  activeSpeech = text
+  window.speechSynthesis.speak(utter)
+}
+
+export function isSpeaking() {
+  return window.speechSynthesis?.speaking ?? false
+}
+
 // Vote enregistré — petit ding
 export function soundVote() {
   play(ctx => {
