@@ -25,6 +25,8 @@ export default function Debate() {
   const prevRound      = useRef(1)
   const autoSubmitRef  = useRef(false)
   const generatingRef  = useRef(false)
+  const loadingRef     = useRef(false)
+  const pendingRef     = useRef(false)  // un appel en attente pendant le verrou
 
   const MAX_ROUNDS    = channel?.max_rounds    || 3
   const TURN_DURATION = channel?.turn_duration || 90
@@ -89,7 +91,7 @@ export default function Debate() {
     const turnSub = supabase
       .channel(`turns:${channel.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'debate_turns',
-        filter: `channel_id=eq.${channel.id}` }, () => setTimeout(loadAll, 300))
+        filter: `channel_id=eq.${channel.id}` }, loadAll)
       .subscribe()
     const commSub = supabase
       .channel(`commentaries:${channel.id}`)
@@ -115,6 +117,10 @@ export default function Debate() {
   }
 
   async function loadAll() {
+    if (loadingRef.current) { pendingRef.current = true; return }
+    loadingRef.current = true
+    pendingRef.current = false
+    try {
     const [turnsRes, commRes, membersRes, readyRes, channelRes] = await Promise.all([
       supabase.from('debate_turns').select('*').eq('channel_id', channel.id).order('submitted_at'),
       supabase.from('round_commentaries').select('*').eq('channel_id', channel.id).order('round'),
@@ -185,21 +191,29 @@ export default function Debate() {
         ? roundTurns.some(t => t.member_id === currentSpeakerInDb.id)
         : false
 
-      if (currentSpeakerDone && member?.is_host) {
+      if (currentSpeakerDone) {
         const nextIndex = dbIndex + 1
         if (nextIndex < memberCount) {
           const now = new Date().toISOString()
-          await supabase.from('channels').update({
-            current_speaker_index: nextIndex,
-            turn_started_at: now
-          }).eq('id', channel.id)
-          setSpeakerIndex(nextIndex)
-          setTurnStartedAt(now)
+          // Utilise un update conditionnel : ne met à jour que si l'index n'a pas déjà changé
+          // Ainsi tous les clients peuvent tenter l'update, seul le premier gagne
+          const { error } = await supabase.from('channels')
+            .update({ current_speaker_index: nextIndex, turn_started_at: now })
+            .eq('id', channel.id)
+            .eq('current_speaker_index', dbIndex)  // condition : seulement si pas encore avancé
+          if (!error) {
+            setSpeakerIndex(nextIndex)
+            setTurnStartedAt(now)
+          }
         }
       }
 
       setWaitingReady(comms.some(c => c.round === maxRound))
       setRound(maxRound)
+    }
+    } finally {
+      loadingRef.current = false
+      if (pendingRef.current) { pendingRef.current = false; loadAll() }
     }
   }
 
@@ -231,7 +245,7 @@ export default function Debate() {
       })
       setCurrentText('')
       if (!text) showToast('⏰ Temps écoulé, message envoyé automatiquement')
-      setTimeout(loadAll, 400)
+      loadAll()
     } catch (e) {
       showToast('Erreur : ' + e.message)
     }
@@ -250,7 +264,7 @@ export default function Debate() {
       })
       setCurrentText('')
       showToast('Argument soumis ✅')
-      setTimeout(loadAll, 400)
+      loadAll()
     } catch (e) {
       showToast('Erreur : ' + e.message)
     } finally {
