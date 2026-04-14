@@ -28,6 +28,8 @@ export default function Debate() {
   const generatingRef  = useRef(false)
   const loadingRef     = useRef(false)
   const pendingRef     = useRef(false)  // un appel en attente pendant le verrou
+  // ── FIX : ref miroir de currentText pour éviter les closures stales dans le timer ──
+  const currentTextRef = useRef('')
 
   const MAX_ROUNDS    = channel?.max_rounds    || 3
   const TURN_DURATION = channel?.turn_duration || 90
@@ -244,7 +246,8 @@ export default function Debate() {
   }
 
   async function handleAutoSubmit() {
-    const text = currentText.trim()
+    // ── FIX : lire la ref (toujours à jour) plutôt que le state (closure stale) ──
+    const text = currentTextRef.current.trim()
     const content = text || '[Temps écoulé — pas de réponse]'
     try {
       await supabase.from('debate_turns').insert({
@@ -252,7 +255,9 @@ export default function Debate() {
         round, content
       })
       setCurrentText('')
+      currentTextRef.current = ''
       if (!text) showToast('⏰ Temps écoulé, message envoyé automatiquement')
+      else showToast('⏰ Temps écoulé — argument envoyé tel quel')
       loadAll()
     } catch (e) {
       showToast('Erreur : ' + e.message)
@@ -271,6 +276,7 @@ export default function Debate() {
         round, content: currentText.trim()
       })
       setCurrentText('')
+      currentTextRef.current = ''
       showToast('Argument soumis ✅')
       loadAll()
     } catch (e) {
@@ -421,7 +427,12 @@ export default function Debate() {
         {isMyTurn && !myTurnDone ? (
           <>
             <textarea className="input" placeholder="Exprime ton argument…"
-              value={currentText} onChange={e => setCurrentText(e.target.value)}
+              value={currentText}
+              onChange={e => {
+                setCurrentText(e.target.value)
+                // ── FIX : synchroniser la ref à chaque frappe ──
+                currentTextRef.current = e.target.value
+              }}
               rows={3} maxLength={MAX_CHARS} autoFocus />
             <div className="flex items-center justify-between" style={{ marginTop: '0.5rem', gap: '0.5rem' }}>
               <span className="text-xs text-muted">{currentText.length}/{MAX_CHARS}</span>
