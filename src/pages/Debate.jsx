@@ -260,19 +260,23 @@ export default function Debate() {
     await supabase.from('round_ready').upsert({ channel_id: channel.id, member_id: member.id, round: maxRound })
   }
 
+  const noteTagsRef = useRef(null)
+
+  const PASTEL_COLORS = [
+    { bg: 'rgba(255,182,193,0.18)', border: 'rgba(255,182,193,0.5)', text: '#ffb6c1' },
+    { bg: 'rgba(180,220,255,0.18)', border: 'rgba(180,220,255,0.5)', text: '#a8d8ff' },
+    { bg: 'rgba(180,255,200,0.18)', border: 'rgba(180,255,200,0.5)', text: '#90f0a8' },
+    { bg: 'rgba(255,220,120,0.18)', border: 'rgba(255,220,120,0.5)', text: '#ffd878' },
+    { bg: 'rgba(220,180,255,0.18)', border: 'rgba(220,180,255,0.5)', text: '#d4b0ff' },
+    { bg: 'rgba(255,200,150,0.18)', border: 'rgba(255,200,150,0.5)', text: '#ffcc96' },
+  ]
+
   function saveNote(val) {
     setNoteText(val)
     try { localStorage.setItem(`brainstorm-${channel?.id}-${member?.id}`, val) } catch {}
-  }
-
-  function copyNoteToArg() {
-    if (!noteText.trim()) return
-    setCurrentText(prev => {
-      const merged = prev ? prev + '\n' + noteText.trim() : noteText.trim()
-      currentTextRef.current = merged
-      return merged
-    })
-    setNoteOpen(false)
+    setTimeout(() => {
+      if (noteTagsRef.current) noteTagsRef.current.scrollTop = noteTagsRef.current.scrollHeight
+    }, 20)
   }
 
   const timerUrgent = displayTimer < 20 && displayTimer > 0 && !!turnStartedAt
@@ -390,25 +394,33 @@ export default function Debate() {
       <div style={{ background: 'var(--bg2)', borderTop: '1px solid var(--border)', padding: '0.75rem 1.25rem', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)', flexShrink: 0 }}>
         {/* Bloc-notes brainstorming */}
         {noteOpen && (
-          <div style={{ marginBottom: '0.75rem', background: 'rgba(255,220,80,0.06)', border: '1px solid rgba(255,220,80,0.25)', borderRadius: 'var(--radius)', padding: '0.6rem 0.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+          <div style={{ marginBottom: '0.75rem', background: 'rgba(15,15,26,0.95)', border: '1px solid rgba(255,220,80,0.25)', borderRadius: 'var(--radius)', padding: '0.6rem 0.75rem', position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
               <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'rgba(255,220,80,0.9)', letterSpacing: '0.08em' }}>✏️ BROUILLON</span>
-              {isMyTurn && !myTurnDone && noteText.trim() && (
-                <button onClick={copyNoteToArg} style={{ fontSize: '0.7rem', background: 'rgba(255,220,80,0.15)', border: '1px solid rgba(255,220,80,0.3)', borderRadius: 6, padding: '0.2rem 0.5rem', cursor: 'pointer', color: 'rgba(255,220,80,0.9)', fontWeight: 700 }}>
-                  → Utiliser
-                </button>
+              {noteText.trim() && (
+                <button onClick={() => saveNote('')} style={{ fontSize: '0.65rem', opacity: 0.45, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text2)' }}>🗑 Effacer</button>
               )}
             </div>
+            {/* Tags par ligne */}
+            {noteText.trim() && (
+              <div ref={noteTagsRef} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', maxHeight: 90, overflowY: 'auto', marginBottom: '0.5rem' }}>
+                {noteText.split('\n').filter(l => l.trim()).map((line, i) => {
+                  const c = PASTEL_COLORS[i % PASTEL_COLORS.length]
+                  return (
+                    <span key={i} style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.text, borderRadius: 20, padding: '0.2rem 0.65rem', fontSize: '0.8rem', lineHeight: 1.4, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {line.trim()}
+                    </span>
+                  )
+                })}
+              </div>
+            )}
             <textarea
-              placeholder="Note tes idées, arguments, mots-clés…"
+              placeholder="Une idée par ligne…"
               value={noteText}
               onChange={e => saveNote(e.target.value)}
-              rows={4}
-              style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontSize: '0.875rem', lineHeight: 1.5, color: 'var(--text)', fontFamily: 'inherit', padding: 0 }}
+              rows={2}
+              style={{ width: '100%', background: 'transparent', border: 'none', borderTop: noteText.trim() ? '1px solid rgba(255,255,255,0.06)' : 'none', outline: 'none', resize: 'none', fontSize: '0.85rem', lineHeight: 1.5, color: 'var(--text2)', fontFamily: 'inherit', padding: noteText.trim() ? '0.4rem 0 0' : 0, marginTop: noteText.trim() ? '0.4rem' : 0 }}
             />
-            {noteText && (
-              <button onClick={() => saveNote('')} style={{ fontSize: '0.65rem', opacity: 0.4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text2)', marginTop: '0.2rem' }}>🗑 Effacer</button>
-            )}
           </div>
         )}
         {isMyTurn && !myTurnDone ? (
