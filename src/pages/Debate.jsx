@@ -19,6 +19,10 @@ export default function Debate() {
   const [speakerIndex, setSpeakerIndex] = useState(0)
   const [turnStartedAt, setTurnStartedAt] = useState(null)
   const [displayTimer, setDisplayTimer] = useState(0)
+  const [noteOpen, setNoteOpen] = useState(false)
+  const [noteText, setNoteText] = useState(() => {
+    try { return localStorage.getItem(`brainstorm-${channel?.id}-${member?.id}`) || '' } catch { return '' }
+  })
   const lastTurnKeyRef = useRef(null)
 
   const scrollRef      = useRef(null)
@@ -256,6 +260,21 @@ export default function Debate() {
     await supabase.from('round_ready').upsert({ channel_id: channel.id, member_id: member.id, round: maxRound })
   }
 
+  function saveNote(val) {
+    setNoteText(val)
+    try { localStorage.setItem(`brainstorm-${channel?.id}-${member?.id}`, val) } catch {}
+  }
+
+  function copyNoteToArg() {
+    if (!noteText.trim()) return
+    setCurrentText(prev => {
+      const merged = prev ? prev + '\n' + noteText.trim() : noteText.trim()
+      currentTextRef.current = merged
+      return merged
+    })
+    setNoteOpen(false)
+  }
+
   const timerUrgent = displayTimer < 20 && displayTimer > 0 && !!turnStartedAt
   const timerExpired = displayTimer === 0 && !!turnStartedAt
   const feed = []
@@ -369,8 +388,39 @@ export default function Debate() {
       </div>
 
       <div style={{ background: 'var(--bg2)', borderTop: '1px solid var(--border)', padding: '0.75rem 1.25rem', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)', flexShrink: 0 }}>
+        {/* Bloc-notes brainstorming */}
+        {noteOpen && (
+          <div style={{ marginBottom: '0.75rem', background: 'rgba(255,220,80,0.06)', border: '1px solid rgba(255,220,80,0.25)', borderRadius: 'var(--radius)', padding: '0.6rem 0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+              <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'rgba(255,220,80,0.9)', letterSpacing: '0.08em' }}>✏️ BROUILLON</span>
+              {isMyTurn && !myTurnDone && noteText.trim() && (
+                <button onClick={copyNoteToArg} style={{ fontSize: '0.7rem', background: 'rgba(255,220,80,0.15)', border: '1px solid rgba(255,220,80,0.3)', borderRadius: 6, padding: '0.2rem 0.5rem', cursor: 'pointer', color: 'rgba(255,220,80,0.9)', fontWeight: 700 }}>
+                  → Utiliser
+                </button>
+              )}
+            </div>
+            <textarea
+              placeholder="Note tes idées, arguments, mots-clés…"
+              value={noteText}
+              onChange={e => saveNote(e.target.value)}
+              rows={4}
+              style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontSize: '0.875rem', lineHeight: 1.5, color: 'var(--text)', fontFamily: 'inherit', padding: 0 }}
+            />
+            {noteText && (
+              <button onClick={() => saveNote('')} style={{ fontSize: '0.65rem', opacity: 0.4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text2)', marginTop: '0.2rem' }}>🗑 Effacer</button>
+            )}
+          </div>
+        )}
         {isMyTurn && !myTurnDone ? (
           <>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text2)' }}>Ton argument</span>
+              <button
+                onClick={() => setNoteOpen(o => !o)}
+                style={{ background: noteOpen ? 'rgba(255,220,80,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${noteOpen ? 'rgba(255,220,80,0.4)' : 'var(--border)'}`, borderRadius: 6, padding: '0.2rem 0.6rem', cursor: 'pointer', fontSize: '0.75rem', color: noteOpen ? 'rgba(255,220,80,0.9)' : 'var(--text2)', fontWeight: 600 }}>
+                ✏️ {noteOpen ? 'Fermer' : 'Brouillon'}{noteText ? ' •' : ''}
+              </button>
+            </div>
             <textarea className="input" placeholder="Ton argument…"
               value={currentText}
               onChange={e => {
@@ -400,6 +450,11 @@ export default function Debate() {
           <div style={{ textAlign: 'center', padding: '0.5rem' }}>
             <p className="text-muted text-sm">{myTurnDone ? '✅ Soumis — attente des autres…' : '⏳ Attends ton tour…'}</p>
             {currentSpeaker && <p className="text-xs text-muted" style={{ marginTop: '0.25rem' }}>🎤 {currentSpeaker.name} parle</p>}
+            <button
+              onClick={() => setNoteOpen(o => !o)}
+              style={{ marginTop: '0.6rem', background: noteOpen ? 'rgba(255,220,80,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${noteOpen ? 'rgba(255,220,80,0.4)' : 'var(--border)'}`, borderRadius: 8, padding: '0.4rem 0.9rem', cursor: 'pointer', fontSize: '0.8rem', color: noteOpen ? 'rgba(255,220,80,0.9)' : 'var(--text2)', fontWeight: 600, transition: 'all 0.2s' }}>
+              ✏️ {noteOpen ? 'Fermer le brouillon' : 'Ouvrir le brouillon'}{noteText ? ' •' : ''}
+            </button>
           </div>
         )}
 
