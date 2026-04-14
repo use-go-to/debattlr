@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/AppContext'
-import { supabase, submitDebateTurn, getDebateTurns, updateChannelStatus } from '../lib/supabase'
+import { supabase, submitDebateTurn, getDebateTurns, updateChannelStatus, callGroq } from '../lib/supabase'
 
 const TURN_DURATION = 90
 const MAX_ROUNDS    = 3
@@ -16,7 +16,9 @@ export default function Debate() {
   const [timer, setTimer]             = useState(TURN_DURATION)
   const [submitting, setSubmitting]   = useState(false)
   const [round, setRound]             = useState(1)
-  const [roundAnim, setRoundAnim]     = useState(null) // affiche "Round X"
+  const [roundAnim, setRoundAnim]     = useState(null)
+  const [commentary, setCommentary]   = useState(null) // commentaire TV entre rounds
+  const [loadingCommentary, setLoadingCommentary] = useState(false)
   const scrollRef = useRef(null)
   const timerRef  = useRef(null)
   const prevRound = useRef(1)
@@ -64,6 +66,20 @@ export default function Debate() {
       : maxRound
 
     if (newRound !== prevRound.current && newRound <= MAX_ROUNDS) {
+      // Commentaire TV entre rounds (seulement l'hôte appelle, résultat affiché via state)
+      if (member?.is_host && prevRound.current >= 1) {
+        setLoadingCommentary(true)
+        setCommentary(null)
+        const roundTurnsData = data.filter(t => t.round === prevRound.current)
+        callGroq('round_commentary', {
+          topic: channel.topic,
+          round: prevRound.current,
+          turns: roundTurnsData.map(t => ({ name: t.member_name, content: t.content }))
+        }).then(res => {
+          setCommentary(res?.result || null)
+          setLoadingCommentary(false)
+        }).catch(() => setLoadingCommentary(false))
+      }
       setRoundAnim(newRound)
       setTimeout(() => setRoundAnim(null), 2500)
     }
@@ -201,6 +217,23 @@ export default function Debate() {
             </div>
           )
         })}
+
+        {/* Commentaire TV entre rounds */}
+        {loadingCommentary && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem', background: 'rgba(124,106,247,0.08)', borderRadius: 'var(--radius)', border: '1px solid var(--accent)' }}>
+            <span style={{ fontSize: '1.5rem' }}>📺</span>
+            <div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.1em', marginBottom: '0.25rem' }}>COMMENTATEUR — EN DIRECT</div>
+              <div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+            </div>
+          </div>
+        )}
+        {commentary && !loadingCommentary && (
+          <div style={{ padding: '1rem', background: 'rgba(124,106,247,0.08)', borderRadius: 'var(--radius)', border: '1px solid var(--accent)' }}>
+            <div style={{ fontSize: '0.7rem', color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.1em', marginBottom: '0.5rem' }}>📺 COMMENTATEUR — EN DIRECT</div>
+            <p style={{ fontSize: '0.9rem', lineHeight: 1.6, color: 'var(--text)', fontStyle: 'italic' }}>{commentary}</p>
+          </div>
+        )}
       </div>
 
       {/* Input area */}
