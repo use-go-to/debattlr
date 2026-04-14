@@ -1,9 +1,3 @@
-Voici le code complet et corrigé pour `Debate.jsx`.
-
-L'astuce principale utilisée ici (que tu avais commencé à implémenter) est la synchronisation de `currentTextRef` à chaque frappe dans le `onChange` du textarea. Cela garantit que lorsque le timer expire, la fonction `handleAutoSubmit` accède à la **dernière version réelle** du texte, même si le "state" React est bloqué dans une vieille closure.
-
-```jsx
-// src/pages/Debate.jsx
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/AppContext'
@@ -34,7 +28,7 @@ export default function Debate() {
   const loadingRef     = useRef(false)
   const pendingRef     = useRef(false)
   
-  // ── FIX : La Ref miroir qui contient toujours la valeur saisie ──
+  // FIX: Ref miroir pour capturer le texte en temps réel hors du cycle de rendu
   const currentTextRef = useRef('')
 
   const MAX_ROUNDS    = channel?.max_rounds    || 3
@@ -45,7 +39,6 @@ export default function Debate() {
   const currentSpeaker = sortedMembers[speakerIndex] || null
   const isMyTurn       = currentSpeaker?.id === member?.id && !waitingReady
 
-  // ── Timer unifié ──────────────────────────────────
   useEffect(() => {
     clearInterval(timerRef.current)
     if (waitingReady || !turnStartedAt) return
@@ -214,9 +207,8 @@ export default function Debate() {
     } catch (e) { console.error(e) } finally { generatingRef.current = false; setGeneratingCommentary(false) }
   }
 
-  // ── LA CORRECTION DU BUG ──
   async function handleAutoSubmit() {
-    const text = currentTextRef.current.trim() // On lit la ref et non le state
+    const text = currentTextRef.current.trim()
     const content = text || '[Temps écoulé — pas de réponse]'
     
     try {
@@ -280,7 +272,6 @@ export default function Debate() {
         </div>
       )}
 
-      {/* Header */}
       <div style={{ padding: '0.75rem 1.25rem', background: 'var(--bg2)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <div className="flex items-center justify-between">
           <div style={{ flex: 1, marginRight: '0.75rem' }}>
@@ -327,7 +318,6 @@ export default function Debate() {
         )}
       </div>
 
-      {/* Feed */}
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         {feed.length === 0 && (
           <div style={{ textAlign: 'center', padding: '3rem 0' }}>
@@ -365,7 +355,6 @@ export default function Debate() {
         })}
       </div>
 
-      {/* Input Zone */}
       <div style={{ background: 'var(--bg2)', borderTop: '1px solid var(--border)', padding: '0.75rem 1.25rem', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)', flexShrink: 0 }}>
         {isMyTurn && !myTurnDone ? (
           <>
@@ -373,7 +362,7 @@ export default function Debate() {
               value={currentText}
               onChange={e => {
                 setCurrentText(e.target.value)
-                currentTextRef.current = e.target.value // SYNCHRO CRITIQUE ICI
+                currentTextRef.current = e.target.value
               }}
               rows={3} maxLength={MAX_CHARS} autoFocus />
             <div className="flex items-center justify-between" style={{ marginTop: '0.5rem', gap: '0.5rem' }}>
@@ -417,4 +406,3 @@ export default function Debate() {
     </div>
   )
 }
-```
