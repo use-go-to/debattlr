@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/AppContext'
 import { supabase, submitDebateTurn, getDebateTurns, updateChannelStatus, callGroq } from '../lib/supabase'
 
-const TURN_DURATION = 90
-const MAX_ROUNDS    = 3
+  const MAX_ROUNDS    = channel?.max_rounds    || 3
+  const TURN_DURATION = channel?.turn_duration || 90
+  const MAX_CHARS     = channel?.max_chars     || 500
 
 export default function Debate() {
   const navigate = useNavigate()
@@ -66,7 +67,13 @@ export default function Debate() {
     }
   }, [channel?.id])
 
-  async function loadAll() {
+  function scrollToBottom() {
+    setTimeout(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      }
+    }, 50)
+  }
     const [turnsRes, commRes, membersRes, readyRes] = await Promise.all([
       supabase.from('debate_turns').select('*').eq('channel_id', channel.id).order('submitted_at'),
       supabase.from('round_commentaries').select('*').eq('channel_id', channel.id).order('round'),
@@ -82,7 +89,7 @@ export default function Debate() {
     setTurns(data)
     setCommentaries(comms)
     setReadyList(ready)
-    scrollRef.current?.scrollTo({ top: 9999, behavior: 'smooth' })
+    scrollToBottom()
 
     if (memberCount === 0) return
 
@@ -338,14 +345,14 @@ export default function Debate() {
                 {timerExpired ? '⏰ Temps écoulé' : `${Math.floor(timer / 60)}:${String(timer % 60).padStart(2, '0')}`}
               </span>
             </div>
-            <div className="progress-bar" style={{ marginBottom: '0.5rem' }}>
+              <div className="progress-bar" style={{ marginBottom: '0.5rem' }}>
               <div className="progress-fill" style={{ width: `${(timer / TURN_DURATION) * 100}%`, background: timerUrgent ? 'var(--danger)' : undefined }} />
             </div>
             <textarea className="input" placeholder={rebuttalTo ? 'Réfute cet argument…' : 'Exprime ton argument…'}
               value={currentText} onChange={e => setCurrentText(e.target.value)}
-              rows={3} maxLength={500} />
+              rows={3} maxLength={MAX_CHARS} />
             <div className="flex items-center justify-between" style={{ marginTop: '0.5rem', gap: '0.5rem' }}>
-              <span className="text-xs text-muted">{currentText.length}/500</span>
+              <span className="text-xs text-muted">{currentText.length}/{MAX_CHARS}</span>
               <button className="btn btn-primary" style={{ width: 'auto', padding: '0.6rem 1.25rem' }}
                 onClick={handleSubmit} disabled={submitting || !currentText.trim()}>
                 {submitting ? '…' : 'Soumettre →'}
