@@ -122,7 +122,14 @@ export default function Debate() {
         }
       }
     } else {
-      setWaitingReady(false)
+      // Round en cours — mais si commentaire existe déjà pour ce round, attendre le ready
+      const commentaryExists = comms.some(c => c.round === maxRound)
+      const roundTurnsSubmitted = data.filter(t => t.round === maxRound).length >= memberCount
+      if (commentaryExists && roundTurnsSubmitted) {
+        setWaitingReady(true)
+      } else {
+        setWaitingReady(false)
+      }
       setRound(maxRound)
     }
   }
@@ -149,10 +156,10 @@ export default function Debate() {
   }
 
   const myTurnsThisRound = turns.filter(t => t.member_id === member?.id && t.round === round).length
-  const isMyTurn = myTurnsThisRound === 0 && round <= MAX_ROUNDS
+  const isMyTurn = myTurnsThisRound === 0 && round <= MAX_ROUNDS && !waitingReady
 
   useEffect(() => {
-    if (!isMyTurn) return
+    if (!isMyTurn || waitingReady) return
     setTimer(TURN_DURATION)
     timerRef.current = setInterval(() => {
       setTimer(prev => {
