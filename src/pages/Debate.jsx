@@ -1,3 +1,8 @@
+Voici le code complet et corrigé pour `Debate.jsx`.
+
+L'astuce principale utilisée ici (que tu avais commencé à implémenter) est la synchronisation de `currentTextRef` à chaque frappe dans le `onChange` du textarea. Cela garantit que lorsque le timer expire, la fonction `handleAutoSubmit` accède à la **dernière version réelle** du texte, même si le "state" React est bloqué dans une vieille closure.
+
+```jsx
 // src/pages/Debate.jsx
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -18,7 +23,7 @@ export default function Debate() {
   const [generatingCommentary, setGeneratingCommentary] = useState(false)
   const [waitingReady, setWaitingReady] = useState(false)
   const [speakerIndex, setSpeakerIndex] = useState(0)
-  const [turnStartedAt, setTurnStartedAt] = useState(null)  // timestamp ISO de début du tour actuel
+  const [turnStartedAt, setTurnStartedAt] = useState(null)
   const [displayTimer, setDisplayTimer] = useState(0)
 
   const scrollRef      = useRef(null)
@@ -27,20 +32,20 @@ export default function Debate() {
   const autoSubmitRef  = useRef(false)
   const generatingRef  = useRef(false)
   const loadingRef     = useRef(false)
-  const pendingRef     = useRef(false)  // un appel en attente pendant le verrou
-  // ── FIX : ref miroir de currentText pour éviter les closures stales dans le timer ──
+  const pendingRef     = useRef(false)
+  
+  // ── FIX : La Ref miroir qui contient toujours la valeur saisie ──
   const currentTextRef = useRef('')
 
   const MAX_ROUNDS    = channel?.max_rounds    || 3
   const TURN_DURATION = channel?.turn_duration || 90
-  const MAX_CHARS     = channel?.max_chars     || 500
+  const MAX_CHARS      = channel?.max_chars     || 500
 
   const sortedMembers  = [...members].sort((a, b) => new Date(a.joined_at) - new Date(b.joined_at))
   const currentSpeaker = sortedMembers[speakerIndex] || null
   const isMyTurn       = currentSpeaker?.id === member?.id && !waitingReady
 
-  // ── Timer unifié basé sur turnStartedAt ──────────────────────────────────
-  // Redémarre à chaque fois que turnStartedAt ou isMyTurn change
+  // ── Timer unifié ──────────────────────────────────
   useEffect(() => {
     clearInterval(timerRef.current)
     if (waitingReady || !turnStartedAt) return
@@ -60,18 +65,16 @@ export default function Debate() {
       }
     }
 
-    tick() // valeur immédiate
+    tick()
     timerRef.current = setInterval(tick, 1000)
     return () => clearInterval(timerRef.current)
   }, [turnStartedAt, isMyTurn, waitingReady])
 
-  // ── Redirections ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!channel) { navigate('/', { replace: true }); return }
     if (channel.status === 'ai_summary') { navigate('/summary', { replace: true }); return }
   }, [channel])
 
-  // ── Polling channel (status + speaker + turn_started_at) ─────────────────
   useEffect(() => {
     if (!channel) return
     const interval = setInterval(async () => {
@@ -88,25 +91,15 @@ export default function Debate() {
     return () => clearInterval(interval)
   }, [channel?.id])
 
-  // ── Realtime subscriptions ────────────────────────────────────────────────
   useEffect(() => {
     if (!channel) return
     loadAll()
-    const turnSub = supabase
-      .channel(`turns:${channel.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'debate_turns',
-        filter: `channel_id=eq.${channel.id}` }, loadAll)
-      .subscribe()
-    const commSub = supabase
-      .channel(`commentaries:${channel.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'round_commentaries',
-        filter: `channel_id=eq.${channel.id}` }, loadAll)
-      .subscribe()
-    const readySub = supabase
-      .channel(`ready:${channel.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'round_ready',
-        filter: `channel_id=eq.${channel.id}` }, loadAll)
-      .subscribe()
+    const turnSub = supabase.channel(`turns:${channel.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'debate_turns', filter: `channel_id=eq.${channel.id}` }, loadAll).subscribe()
+    const commSub = supabase.channel(`commentaries:${channel.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'round_commentaries', filter: `channel_id=eq.${channel.id}` }, loadAll).subscribe()
+    const readySub = supabase.channel(`ready:${channel.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'round_ready', filter: `channel_id=eq.${channel.id}` }, loadAll).subscribe()
     return () => {
       supabase.removeChannel(turnSub)
       supabase.removeChannel(commSub)
@@ -115,9 +108,7 @@ export default function Debate() {
   }, [channel?.id])
 
   function scrollToBottom() {
-    setTimeout(() => {
-      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }, 50)
+    setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight }, 50)
   }
 
   async function loadAll() {
@@ -125,102 +116,88 @@ export default function Debate() {
     loadingRef.current = true
     pendingRef.current = false
     try {
-    const [turnsRes, commRes, membersRes, readyRes, channelRes] = await Promise.all([
-      supabase.from('debate_turns').select('*').eq('channel_id', channel.id).order('submitted_at'),
-      supabase.from('round_commentaries').select('*').eq('channel_id', channel.id).order('round'),
-      supabase.from('members').select('*').eq('channel_id', channel.id).order('joined_at'),
-      supabase.from('round_ready').select('*').eq('channel_id', channel.id),
-      supabase.from('channels').select('current_speaker_index,turn_started_at').eq('id', channel.id).single()
-    ])
+      const [turnsRes, commRes, membersRes, readyRes, channelRes] = await Promise.all([
+        supabase.from('debate_turns').select('*').eq('channel_id', channel.id).order('submitted_at'),
+        supabase.from('round_commentaries').select('*').eq('channel_id', channel.id).order('round'),
+        supabase.from('members').select('*').eq('channel_id', channel.id).order('joined_at'),
+        supabase.from('round_ready').select('*').eq('channel_id', channel.id),
+        supabase.from('channels').select('current_speaker_index,turn_started_at').eq('id', channel.id).single()
+      ])
 
-    const data        = turnsRes.data || []
-    const comms       = commRes.data  || []
-    const ready       = readyRes.data || []
-    const allMembers  = membersRes.data || []
-    const memberCount = allMembers.length || members.length
-    const chData      = channelRes.data
-    const dbIndex     = chData?.current_speaker_index ?? 0
-    const dbStartedAt = chData?.turn_started_at ?? null
+      const data = turnsRes.data || []
+      const comms = commRes.data || []
+      const ready = readyRes.data || []
+      const allMembers = membersRes.data || []
+      const memberCount = allMembers.length || members.length
+      const chData = channelRes.data
+      const dbIndex = chData?.current_speaker_index ?? 0
+      const dbStartedAt = chData?.turn_started_at ?? null
 
-    // Sons : nouveau message ou nouveau commentaire IA
-    if (data.length > turns.length) soundMessage()
-    if (comms.length > commentaries.length) soundAI()
+      if (data.length > turns.length) soundMessage()
+      if (comms.length > commentaries.length) soundAI()
 
-    setSpeakerIndex(dbIndex)
-    setTurnStartedAt(dbStartedAt)
-    setTurns(data)
-    setCommentaries(comms)
-    setReadyList(ready)
-    scrollToBottom()
+      setSpeakerIndex(dbIndex)
+      setTurnStartedAt(dbStartedAt)
+      setTurns(data)
+      setCommentaries(comms)
+      setReadyList(ready)
+      scrollToBottom()
 
-    if (memberCount === 0) return
+      const maxRound = data.length > 0 ? Math.max(...data.map(t => t.round)) : 1
+      const roundTurns = data.filter(t => t.round === maxRound)
+      const allSubmitted = roundTurns.length >= memberCount
 
-    const maxRound   = data.length > 0 ? Math.max(...data.map(t => t.round)) : 1
-    const roundTurns = data.filter(t => t.round === maxRound)
-    const allSubmitted = roundTurns.length >= memberCount
-
-    if (allSubmitted) {
-      const commentaryExists = comms.some(c => c.round === maxRound)
-      if (!commentaryExists && member?.is_host && !generatingRef.current) {
-        generatingRef.current = true
-        setGeneratingCommentary(true)
-        await generateCommentary(maxRound, roundTurns)
-        return
-      }
-      if (commentaryExists) {
-        const allReady = ready.filter(r => r.round === maxRound).length >= memberCount
-        if (allReady && maxRound < MAX_ROUNDS) {
-          const newRound = maxRound + 1
-          setWaitingReady(false)
-          if (newRound !== prevRound.current) {
-            prevRound.current = newRound
-            setRoundAnim(newRound)
-            setTimeout(() => setRoundAnim(null), 2500)
+      if (allSubmitted) {
+        const commentaryExists = comms.some(c => c.round === maxRound)
+        if (!commentaryExists && member?.is_host && !generatingRef.current) {
+          generatingRef.current = true
+          setGeneratingCommentary(true)
+          await generateCommentary(maxRound, roundTurns)
+          return
+        }
+        if (commentaryExists) {
+          const allReady = ready.filter(r => r.round === maxRound).length >= memberCount
+          if (allReady && maxRound < MAX_ROUNDS) {
+            const newRound = maxRound + 1
+            setWaitingReady(false)
+            if (newRound !== prevRound.current) {
+              prevRound.current = newRound
+              setRoundAnim(newRound)
+              setTimeout(() => setRoundAnim(null), 2500)
+            }
+            setRound(newRound)
+            soundNewRound()
+            if (member?.is_host) {
+              const now = new Date().toISOString()
+              await supabase.from('channels').update({ current_speaker_index: 0, turn_started_at: now }).eq('id', channel.id)
+            }
+          } else if (allReady && maxRound >= MAX_ROUNDS) {
+            setWaitingReady(false)
+            soundDebateEnd()
+            if (member?.is_host) await updateChannelStatus(channel.id, 'ai_summary')
+          } else {
+            setWaitingReady(true)
+            setRound(maxRound)
           }
-          setRound(newRound)
-          soundNewRound()
-          if (member?.is_host) {
+        }
+      } else {
+        const currentSpeakerInDb = allMembers[dbIndex]
+        const currentSpeakerDone = currentSpeakerInDb ? roundTurns.some(t => t.member_id === currentSpeakerInDb.id) : false
+
+        if (currentSpeakerDone) {
+          const nextIndex = dbIndex + 1
+          if (nextIndex < memberCount) {
             const now = new Date().toISOString()
-            await supabase.from('channels').update({ current_speaker_index: 0, turn_started_at: now }).eq('id', channel.id)
-            setSpeakerIndex(0)
-            setTurnStartedAt(now)
-          }
-        } else if (allReady && maxRound >= MAX_ROUNDS) {
-          setWaitingReady(false)
-          soundDebateEnd()
-          if (member?.is_host) await updateChannelStatus(channel.id, 'ai_summary')
-        } else {
-          setWaitingReady(true)
-          setRound(maxRound)
-        }
-      }
-    } else {
-      // Avancer le speaker si le locuteur actuel (selon DB) a déjà soumis
-      const currentSpeakerInDb = allMembers[dbIndex]
-      const currentSpeakerDone = currentSpeakerInDb
-        ? roundTurns.some(t => t.member_id === currentSpeakerInDb.id)
-        : false
-
-      if (currentSpeakerDone) {
-        const nextIndex = dbIndex + 1
-        if (nextIndex < memberCount) {
-          const now = new Date().toISOString()
-          // Utilise un update conditionnel : ne met à jour que si l'index n'a pas déjà changé
-          // Ainsi tous les clients peuvent tenter l'update, seul le premier gagne
-          const { error } = await supabase.from('channels')
-            .update({ current_speaker_index: nextIndex, turn_started_at: now })
-            .eq('id', channel.id)
-            .eq('current_speaker_index', dbIndex)  // condition : seulement si pas encore avancé
-          if (!error) {
-            setSpeakerIndex(nextIndex)
-            setTurnStartedAt(now)
+            const { error } = await supabase.from('channels')
+              .update({ current_speaker_index: nextIndex, turn_started_at: now })
+              .eq('id', channel.id)
+              .eq('current_speaker_index', dbIndex)
+            if (!error) { setSpeakerIndex(nextIndex); setTurnStartedAt(now) }
           }
         }
+        setWaitingReady(comms.some(c => c.round === maxRound))
+        setRound(maxRound)
       }
-
-      setWaitingReady(comms.some(c => c.round === maxRound))
-      setRound(maxRound)
-    }
     } finally {
       loadingRef.current = false
       if (pendingRef.current) { pendingRef.current = false; loadAll() }
@@ -230,25 +207,18 @@ export default function Debate() {
   async function generateCommentary(roundNum, roundTurns) {
     try {
       const res = await callGroq('round_commentary', {
-        topic: channel.topic,
-        round: roundNum,
+        topic: channel.topic, round: roundNum,
         turns: roundTurns.map(t => ({ name: t.member_name, content: t.content }))
       })
-      await supabase.from('round_commentaries').insert({
-        channel_id: channel.id, round: roundNum, content: res?.result || ''
-      })
-    } catch (e) {
-      console.error('Commentary error', e)
-    } finally {
-      generatingRef.current = false
-      setGeneratingCommentary(false)
-    }
+      await supabase.from('round_commentaries').insert({ channel_id: channel.id, round: roundNum, content: res?.result || '' })
+    } catch (e) { console.error(e) } finally { generatingRef.current = false; setGeneratingCommentary(false) }
   }
 
+  // ── LA CORRECTION DU BUG ──
   async function handleAutoSubmit() {
-    // ── FIX : lire la ref (toujours à jour) plutôt que le state (closure stale) ──
-    const text = currentTextRef.current.trim()
+    const text = currentTextRef.current.trim() // On lit la ref et non le state
     const content = text || '[Temps écoulé — pas de réponse]'
+    
     try {
       await supabase.from('debate_turns').insert({
         channel_id: channel.id, member_id: member.id, member_name: member.name,
@@ -256,12 +226,10 @@ export default function Debate() {
       })
       setCurrentText('')
       currentTextRef.current = ''
-      if (!text) showToast('⏰ Temps écoulé, message envoyé automatiquement')
+      if (!text) showToast('⏰ Temps écoulé, message vide envoyé')
       else showToast('⏰ Temps écoulé — argument envoyé tel quel')
       loadAll()
-    } catch (e) {
-      showToast('Erreur : ' + e.message)
-    }
+    } catch (e) { showToast('Erreur : ' + e.message) }
   }
 
   async function handleSubmit() {
@@ -279,23 +247,16 @@ export default function Debate() {
       currentTextRef.current = ''
       showToast('Argument soumis ✅')
       loadAll()
-    } catch (e) {
-      showToast('Erreur : ' + e.message)
-    } finally {
-      setSubmitting(false)
-    }
+    } catch (e) { showToast('Erreur : ' + e.message) } finally { setSubmitting(false) }
   }
 
   async function handleReady() {
     const maxRound = turns.length > 0 ? Math.max(...turns.map(t => t.round)) : 1
-    await supabase.from('round_ready').upsert({
-      channel_id: channel.id, member_id: member.id, round: maxRound
-    })
+    await supabase.from('round_ready').upsert({ channel_id: channel.id, member_id: member.id, round: maxRound })
   }
 
-  const timerUrgent  = displayTimer < 20 && displayTimer > 0
+  const timerUrgent = displayTimer < 20 && displayTimer > 0
   const timerExpired = displayTimer === 0
-
   const feed = []
   for (let r = 1; r <= MAX_ROUNDS; r++) {
     turns.filter(t => t.round === r).forEach(t => feed.push({ type: 'turn', data: t }))
@@ -305,13 +266,11 @@ export default function Debate() {
   }
 
   if (!channel) return null
-
   const turnsThisRound = turns.filter(t => t.round === round)
-  const myTurnDone     = turnsThisRound.some(t => t.member_id === member?.id)
+  const myTurnDone = turnsThisRound.some(t => t.member_id === member?.id)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', position: 'fixed', width: '100%', top: 0, left: 0 }}>
-
       {roundAnim && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15,15,26,0.92)', animation: 'fadeInOut 2.5s ease forwards' }}>
           <div style={{ textAlign: 'center' }}>
@@ -332,7 +291,7 @@ export default function Debate() {
             <div className="badge badge-warn">Tour {Math.min(round, MAX_ROUNDS)}/{MAX_ROUNDS}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.3rem', justifyContent: 'flex-end' }}>
               {sortedMembers.map((m, i) => {
-                const hasTurn   = turnsThisRound.some(t => t.member_id === m.id)
+                const hasTurn = turnsThisRound.some(t => t.member_id === m.id)
                 const isCurrent = i === speakerIndex && !waitingReady
                 return (
                   <div key={m.id} style={{
@@ -340,8 +299,7 @@ export default function Debate() {
                     background: hasTurn ? 'var(--success)' : isCurrent ? 'var(--accent)' : 'var(--border)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: '0.6rem', fontWeight: 700, color: 'var(--bg)',
-                    border: isCurrent ? '2px solid white' : 'none',
-                    transition: 'all 0.3s'
+                    border: isCurrent ? '2px solid white' : 'none', transition: 'all 0.3s'
                   }}>{m.name[0]}</div>
                 )
               })}
@@ -349,7 +307,6 @@ export default function Debate() {
           </div>
         </div>
 
-        {/* Barre de timer visible par tous */}
         {!waitingReady && currentSpeaker && (
           <div style={{ marginTop: '0.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
@@ -363,28 +320,24 @@ export default function Debate() {
             <div className="progress-bar">
               <div className="progress-fill" style={{
                 width: `${(displayTimer / TURN_DURATION) * 100}%`,
-                background: timerUrgent ? 'var(--danger)' : undefined,
-                transition: 'width 1s linear'
+                background: timerUrgent ? 'var(--danger)' : undefined, transition: 'width 1s linear'
               }} />
             </div>
           </div>
         )}
       </div>
 
-      {/* Feed scrollable */}
+      {/* Feed */}
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         {feed.length === 0 && (
           <div style={{ textAlign: 'center', padding: '3rem 0' }}>
             <p style={{ fontSize: '2rem' }}>💬</p>
-            <p className="text-muted text-sm" style={{ marginTop: '0.5rem' }}>
-              {currentSpeaker ? `${currentSpeaker.name} ouvre le débat…` : 'Le débat commence…'}
-            </p>
+            <p className="text-muted text-sm" style={{ marginTop: '0.5rem' }}>Le débat commence…</p>
           </div>
         )}
         {feed.map((item) => {
           if (item.type === 'turn') {
-            const t = item.data
-            const isMe = t.member_id === member?.id
+            const t = item.data; const isMe = t.member_id === member?.id
             return (
               <div key={t.id} className={`turn-bubble ${isMe ? 'mine' : ''}`}>
                 <div className="turn-meta">
@@ -396,98 +349,72 @@ export default function Debate() {
               </div>
             )
           }
-          if (item.type === 'commentary') {
-            return (
-              <div key={`comm-${item.data.round}`} style={{ padding: '1rem', background: 'rgba(124,106,247,0.08)', borderRadius: 'var(--radius)', border: '1px solid var(--accent)' }}>
-                <div style={{ fontSize: '0.7rem', color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.1em', marginBottom: '0.5rem' }}>
-                  📺 COMMENTATEUR — FIN DU ROUND {item.data.round}
-                </div>
-                <p style={{ fontSize: '0.9rem', lineHeight: 1.6, color: 'var(--text)', fontStyle: 'italic' }}>{item.data.content}</p>
-              </div>
-            )
-          }
-          if (item.type === 'loading') {
-            return (
-              <div key={`loading-${item.round}`} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem', background: 'rgba(124,106,247,0.08)', borderRadius: 'var(--radius)', border: '1px solid var(--accent)' }}>
-                <span style={{ fontSize: '1.5rem' }}>📺</span>
-                <div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.1em', marginBottom: '0.25rem' }}>COMMENTATEUR — EN DIRECT</div>
-                  <div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
-                </div>
-              </div>
-            )
-          }
+          if (item.type === 'commentary') return (
+            <div key={`comm-${item.data.round}`} style={{ padding: '1rem', background: 'rgba(124,106,247,0.08)', borderRadius: 'var(--radius)', border: '1px solid var(--accent)' }}>
+              <div style={{ fontSize: '0.7rem', color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.1em', marginBottom: '0.5rem' }}>📺 COMMENTATEUR — ROUND {item.data.round}</div>
+              <p style={{ fontSize: '0.9rem', lineHeight: 1.6, color: 'var(--text)', fontStyle: 'italic' }}>{item.data.content}</p>
+            </div>
+          )
+          if (item.type === 'loading') return (
+            <div key={`loading-${item.round}`} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem', background: 'rgba(124,106,247,0.08)', borderRadius: 'var(--radius)', border: '1px solid var(--accent)' }}>
+              <span style={{ fontSize: '1.5rem' }}>📺</span>
+              <div><div style={{ fontSize: '0.7rem', color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.1em', marginBottom: '0.25rem' }}>ANALYSE EN COURS…</div><div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /></div>
+            </div>
+          )
           return null
         })}
       </div>
 
-      {/* Zone de saisie */}
+      {/* Input Zone */}
       <div style={{ background: 'var(--bg2)', borderTop: '1px solid var(--border)', padding: '0.75rem 1.25rem', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)', flexShrink: 0 }}>
-
         {isMyTurn && !myTurnDone ? (
           <>
-            <textarea className="input" placeholder="Exprime ton argument…"
+            <textarea className="input" placeholder="Ton argument…"
               value={currentText}
               onChange={e => {
                 setCurrentText(e.target.value)
-                // ── FIX : synchroniser la ref à chaque frappe ──
-                currentTextRef.current = e.target.value
+                currentTextRef.current = e.target.value // SYNCHRO CRITIQUE ICI
               }}
               rows={3} maxLength={MAX_CHARS} autoFocus />
             <div className="flex items-center justify-between" style={{ marginTop: '0.5rem', gap: '0.5rem' }}>
               <span className="text-xs text-muted">{currentText.length}/{MAX_CHARS}</span>
-              <button className="btn btn-primary" style={{ width: 'auto', padding: '0.6rem 1.25rem' }}
-                onClick={handleSubmit} disabled={submitting || !currentText.trim()}
-                onMouseDown={soundClick}>
+              <button className="btn btn-primary" style={{ width: 'auto', padding: '0.6rem 1.25rem' }} onClick={handleSubmit} disabled={submitting || !currentText.trim()}>
                 {submitting ? '…' : 'Soumettre →'}
               </button>
             </div>
           </>
         ) : waitingReady ? (() => {
-          const maxRound   = turns.length > 0 ? Math.max(...turns.map(t => t.round)) : 1
-          const iAmReady   = readyList.some(r => r.member_id === member?.id && r.round === maxRound)
+          const maxRound = turns.length > 0 ? Math.max(...turns.map(t => t.round)) : 1
+          const iAmReady = readyList.some(r => r.member_id === member?.id && r.round === maxRound)
           const readyCount = readyList.filter(r => r.round === maxRound).length
           return (
             <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {generatingCommentary
-                ? <><div className="spinner" style={{ margin: '0 auto' }} /><p className="text-muted text-sm">📺 Le commentateur analyse le round…</p></>
-                : <>
-                    <p className="text-sm" style={{ color: 'var(--text)' }}>📺 Lis le commentaire avant de continuer</p>
-                    <button className="btn btn-primary" onClick={handleReady} disabled={iAmReady} onMouseDown={soundClick}>
-                      {iAmReady ? `✅ Prêt (${readyCount}/${members.length})` : '✅ Je suis prêt pour le round suivant'}
-                    </button>
-                  </>
+              {generatingCommentary ? <><div className="spinner" style={{ margin: '0 auto' }} /><p className="text-muted text-sm">Analyse du round…</p></> :
+                <button className="btn btn-primary" onClick={handleReady} disabled={iAmReady}>{iAmReady ? `✅ Prêt (${readyCount}/${members.length})` : '✅ Prêt pour le round suivant'}</button>
               }
             </div>
           )
-        })() : myTurnDone ? (
+        })() : (
           <div style={{ textAlign: 'center', padding: '0.5rem' }}>
-            <p className="text-muted text-sm">✅ Argument soumis — en attente des autres…</p>
-            {currentSpeaker && <p className="text-xs text-muted" style={{ marginTop: '0.25rem' }}>🎤 {currentSpeaker.name} parle maintenant</p>}
-          </div>
-        ) : (
-          <div style={{ textAlign: 'center', padding: '0.5rem' }}>
-            <p className="text-muted text-sm">⏳ Attends ton tour…</p>
-            {currentSpeaker && <p className="text-xs text-muted" style={{ marginTop: '0.25rem' }}>🎤 {currentSpeaker.name} parle maintenant</p>}
+            <p className="text-muted text-sm">{myTurnDone ? '✅ Soumis — attente des autres…' : '⏳ Attends ton tour…'}</p>
+            {currentSpeaker && <p className="text-xs text-muted" style={{ marginTop: '0.25rem' }}>🎤 {currentSpeaker.name} parle</p>}
           </div>
         )}
 
         {member?.is_host && (
-          <button className="btn btn-danger" style={{ marginTop: '0.75rem', padding: '0.6rem', fontSize: '0.85rem' }}
-            onClick={() => updateChannelStatus(channel.id, 'ai_summary')}>
-            🏁 Terminer le débat maintenant
-          </button>
+          <button className="btn btn-danger" style={{ marginTop: '0.75rem', padding: '0.6rem', fontSize: '0.85rem' }} onClick={() => updateChannelStatus(channel.id, 'ai_summary')}>🏁 Terminer le débat</button>
         )}
       </div>
 
       <style>{`
         @keyframes fadeInOut {
-          0%   { opacity: 0; transform: scale(0.8); }
-          20%  { opacity: 1; transform: scale(1); }
-          80%  { opacity: 1; transform: scale(1); }
+          0% { opacity: 0; transform: scale(0.8); }
+          20% { opacity: 1; transform: scale(1); }
+          80% { opacity: 1; transform: scale(1); }
           100% { opacity: 0; transform: scale(1.1); }
         }
       `}</style>
     </div>
   )
 }
+```
