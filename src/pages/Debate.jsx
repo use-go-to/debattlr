@@ -85,7 +85,7 @@ export default function Debate() {
     const [turnsRes, commRes, membersRes, readyRes, channelRes] = await Promise.all([
       supabase.from('debate_turns').select('*').eq('channel_id', channel.id).order('submitted_at'),
       supabase.from('round_commentaries').select('*').eq('channel_id', channel.id).order('round'),
-      supabase.from('members').select('id').eq('channel_id', channel.id),
+      supabase.from('members').select('*').eq('channel_id', channel.id).order('joined_at'),
       supabase.from('round_ready').select('*').eq('channel_id', channel.id),
       supabase.from('channels').select('current_speaker_index,turn_started_at').eq('id', channel.id).single()
     ])
@@ -93,11 +93,12 @@ export default function Debate() {
     const data        = turnsRes.data || []
     const comms       = commRes.data  || []
     const ready       = readyRes.data || []
-    const memberCount = membersRes.data?.length || members.length
+    const allMembers  = membersRes.data || []
+    const memberCount = allMembers.length || members.length
     const chData      = channelRes.data
+    const dbSpeakerIndex = chData?.current_speaker_index ?? 0
 
-    if (chData) setSpeakerIndex(chData.current_speaker_index || 0)
-
+    setSpeakerIndex(dbSpeakerIndex)
     setTurns(data)
     setCommentaries(comms)
     setReadyList(ready)
@@ -127,7 +128,6 @@ export default function Debate() {
             setTimeout(() => setRoundAnim(null), 2500)
           }
           setRound(newRound)
-          // Reset speaker to host (index 0) for new round
           if (member?.is_host) {
             await supabase.from('channels').update({ current_speaker_index: 0, turn_started_at: new Date().toISOString() }).eq('id', channel.id)
           }
@@ -140,12 +140,25 @@ export default function Debate() {
         }
       }
     } else {
-      const commentaryExistsForCurrent = comms.some(c => c.round === maxRound)
-      if (commentaryExistsForCurrent) {
-        setWaitingReady(true)
-      } else {
-        setWaitingReady(false)
+      // Avancer le speaker si le locuteur actuel a déjà soumis ce round
+      // On lit l'index directement depuis la DB (dbSpeakerIndex) pour éviter les stale closures
+      const currentSpeakerInDb = allMembers[dbSpeakerIndex]
+      const currentSpeakerDone = currentSpeakerInDb
+        ? roundTurns.some(t => t.member_id === currentSpeakerInDb.id)
+        : false
+
+      if (currentSpeakerDone && member?.is_host) {
+        const nextIndex = dbSpeakerIndex + 1
+        if (nextIndex < memberCount) {
+          await supabase.from('channels').update({
+            current_speaker_index: nextIndex,
+            turn_started_at: new Date().toISOString()
+          }).eq('id', channel.id)
+        }
       }
+
+      const commentaryExistsForCurrent = comms.some(c => c.round === maxRound)
+      setWaitingReady(commentaryExistsForCurrent)
       setRound(maxRound)
     }
   }
@@ -208,19 +221,6 @@ export default function Debate() {
   const timerUrgent  = displayTimer < 20 && displayTimer > 0
   const timerExpired = displayTimer === 0
 
-  async function advanceSpeaker(submittedText) {
-    if (!member?.is_host) return
-    const nextIndex = speakerIndex + 1
-    if (nextIndex >= sortedMembers.length) {
-      // Tout le monde a parlé ce round — pas besoin d'avancer, loadAll gère la fin du round
-      return
-    }
-    await supabase.from('channels').update({
-      current_speaker_index: nextIndex,
-      turn_started_at: new Date().toISOString()
-    }).eq('id', channel.id)
-  }
-
   async function handleAutoSubmit() {
     const text = currentText.trim()
     const content = text || '[Temps écoulé — pas de réponse]'
@@ -232,8 +232,8 @@ export default function Debate() {
       })
       setCurrentText('')
       if (!text) showToast('⏰ Temps écoulé, message envoyé automatiquement')
-      // L'hôte avance le speaker après un délai pour que l'insert soit visible
-      setTimeout(() => advanceSpeaker(), 500)
+      // loadAll va détecter que le locuteur actuel a soumis et avancer l'index
+      await loadAll()
     } catch (e) {
       showToast('Erreur : ' + e.message)
     } finally {
@@ -254,7 +254,7 @@ export default function Debate() {
       })
       setCurrentText('')
       showToast('Argument soumis ✅')
-      setTimeout(() => advanceSpeaker(), 500)
+      await loadAll()
     } catch (e) {
       showToast('Erreur : ' + e.message)
     } finally {
