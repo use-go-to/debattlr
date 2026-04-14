@@ -35,7 +35,7 @@ export default function Lobby() {
     if (members.length < 2) return showToast('Il faut au moins 2 participants')
     setLoading(true)
     try {
-      const data = await callGroq('suggest_topics', { theme: channel.theme })
+      const data = await callGroq('suggest_topics', { theme: channel.theme, difficulty: channel.difficulty || 'medium' })
       if (!data?.topics?.length) throw new Error('Pas de sujets reçus')
       await saveTopics(channel.id, data.topics)
       await updateChannelStatus(channel.id, 'topic_vote')
