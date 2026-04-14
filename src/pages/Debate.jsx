@@ -53,6 +53,10 @@ export default function Debate() {
     if (lastTurnKeyRef.current !== turnKey) {
       lastTurnKeyRef.current = turnKey
       autoSubmitRef.current = false
+      if (isMyTurn) {
+        setCurrentText('')
+        currentTextRef.current = ''
+      }
     }
 
     if (isMyTurn) soundMyTurn()
@@ -410,6 +414,7 @@ export default function Debate() {
                   return (
                     <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: c.bg, border: `1px solid ${c.border}`, color: c.text, borderRadius: 20, padding: '0.2rem 0.5rem 0.2rem 0.65rem', fontSize: '0.8rem', lineHeight: 1.4, wordBreak: 'break-word', cursor: 'pointer' }}
                       onClick={() => {
+                        if (!isMyTurn || myTurnDone) return
                         const next = currentText ? currentText + ' ' + trimmed : trimmed
                         setCurrentText(next)
                         currentTextRef.current = next
