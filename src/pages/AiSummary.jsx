@@ -7,15 +7,26 @@ import { supabase, callGroq, getDebateTurns, saveAiSummary, getAiSummaries, upda
 export default function AiSummary() {
   const navigate = useNavigate()
   const { channel, member, members, showToast } = useApp()
-  const [mySummary, setMySummary]   = useState(null)
+  const [mySummary, setMySummary]       = useState(null)
   const [allSummaries, setAllSummaries] = useState([])
-  const [loading, setLoading]       = useState(false)
-  const [analyzed, setAnalyzed]     = useState(false)
+  const [loading, setLoading]           = useState(false)
+  const [analyzed, setAnalyzed]         = useState(false)
+  const [memberCount, setMemberCount]   = useState(members.length)
 
   useEffect(() => {
     if (!channel) { navigate('/', { replace: true }); return }
     if (channel.status === 'peer_vote') { navigate('/peervote', { replace: true }); return }
   }, [channel])
+
+  // Polling fallback
+  useEffect(() => {
+    if (!channel) return
+    const interval = setInterval(async () => {
+      const { data } = await supabase.from('channels').select('status').eq('id', channel.id).single()
+      if (data?.status === 'peer_vote') navigate('/peervote', { replace: true })
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [channel?.id])
 
   useEffect(() => {
     if (!channel) return
@@ -29,11 +40,15 @@ export default function AiSummary() {
   }, [channel?.id])
 
   async function loadSummaries() {
-    const data = await getAiSummaries(channel.id)
+    const [data, m] = await Promise.all([
+      getAiSummaries(channel.id),
+      supabase.from('members').select('id').eq('channel_id', channel.id)
+    ])
+    const count = m.data?.length || members.length
+    setMemberCount(count)
     setAllSummaries(data)
     const mine = data.find(s => s.member_id === member?.id)
     if (mine) { setMySummary(mine); setAnalyzed(true) }
-    // Ne pas auto-avancer — l'hôte décide quand passer au vote
   }
 
   async function handleAnalyze() {
@@ -66,7 +81,8 @@ export default function AiSummary() {
 
   if (!channel) return null
 
-  const waiting = allSummaries.length < members.length
+  const waiting    = allSummaries.length < memberCount
+  const allDone    = !waiting && memberCount > 0
 
   return (
     <div className="page">
@@ -80,10 +96,10 @@ export default function AiSummary() {
       <div className="card">
         <div className="flex items-center justify-between" style={{ marginBottom: '0.5rem' }}>
           <span className="text-sm text-muted">Analyses reçues</span>
-          <span className="badge badge-accent">{allSummaries.length} / {members.length}</span>
+          <span className="badge badge-accent">{allSummaries.length} / {memberCount}</span>
         </div>
         <div className="progress-bar">
-          <div className="progress-fill" style={{ width: `${members.length ? (allSummaries.length / members.length) * 100 : 0}%` }} />
+          <div className="progress-fill" style={{ width: `${memberCount ? (allSummaries.length / memberCount) * 100 : 0}%` }} />
         </div>
         <div className="flex" style={{ gap: '0.5rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
           {members.map(m => {
@@ -98,7 +114,7 @@ export default function AiSummary() {
         </div>
       </div>
 
-      {/* My analysis */}
+      {/* Bouton analyser */}
       {!analyzed && (
         <div className="card" style={{ textAlign: 'center', gap: '1rem', display: 'flex', flexDirection: 'column' }}>
           <div style={{ fontSize: '2.5rem' }}>🤖</div>
@@ -114,6 +130,7 @@ export default function AiSummary() {
         </div>
       )}
 
+      {/* Mon analyse */}
       {analyzed && mySummary && (
         <div className="card card-glow">
           <div className="badge badge-success" style={{ marginBottom: '0.75rem' }}>✅ Ton analyse</div>
@@ -121,12 +138,10 @@ export default function AiSummary() {
           <p style={{ fontSize: '0.9rem', lineHeight: 1.6, marginBottom: '1rem', color: 'var(--text)' }}>
             {mySummary.summary}
           </p>
-
           <h3 className="fw-bold" style={{ marginBottom: '0.5rem' }}>💬 Avis de l'IA</h3>
           <p style={{ fontSize: '0.875rem', lineHeight: 1.6, marginBottom: '1rem', color: 'var(--text2)' }}>
             {mySummary.ai_feedback}
           </p>
-
           <h3 className="fw-bold" style={{ marginBottom: '0.75rem' }}>📊 Scores</h3>
           {[
             ['Logique', mySummary.score_logic],
@@ -144,6 +159,7 @@ export default function AiSummary() {
         </div>
       )}
 
+      {/* En attente des autres */}
       {analyzed && waiting && (
         <div className="card" style={{ textAlign: 'center' }}>
           <div className="spinner" style={{ marginBottom: '0.75rem' }} />
@@ -151,14 +167,22 @@ export default function AiSummary() {
         </div>
       )}
 
-      {!waiting && member?.is_host && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
+      {/* Bouton suivant — visible par tous quand tout le monde a analysé */}
+      {allDone && analyzed && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           <div className="badge badge-success" style={{ justifyContent: 'center' }}>
             ✅ Tout le monde a été analysé
           </div>
-          <button className="btn btn-primary" onClick={() => updateChannelStatus(channel.id, 'peer_vote')}>
-            Passer au vote pair-à-pair →
-          </button>
+          {member?.is_host ? (
+            <button className="btn btn-primary" onClick={() => updateChannelStatus(channel.id, 'peer_vote')}>
+              Continuer →
+            </button>
+          ) : (
+            <div className="card" style={{ textAlign: 'center' }}>
+              <div className="spinner" style={{ margin: '0 auto 0.5rem' }} />
+              <p className="text-muted text-sm">⏳ En attente que l'hôte continue…</p>
+            </div>
+          )}
         </div>
       )}
     </div>
