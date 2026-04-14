@@ -25,7 +25,9 @@ export default function Manifesto() {
       const existing = await getManifestoByChannel(channel.id).catch(() => null)
       if (existing) {
         setManifesto(existing.content)
-        setShareUrl(`${window.location.origin}/p/${existing.public_slug}`)
+        setRanking(existing.ranking || [])
+        setWinner(existing.winner_name)
+        setShareUrl(`${window.location.origin}/debattle/p/${existing.public_slug}`)
         setLoading(false)
         return
       }
@@ -38,7 +40,9 @@ export default function Manifesto() {
           if (m) {
             clearInterval(interval)
             setManifesto(m.content)
-            setShareUrl(`${window.location.origin}/p/${m.public_slug}`)
+            setRanking(m.ranking || [])
+            setWinner(m.winner_name)
+            setShareUrl(`${window.location.origin}/debattle/p/${m.public_slug}`)
             setLoading(false)
           }
         }, 2000)
@@ -55,12 +59,10 @@ export default function Manifesto() {
       getPeerVotes(channel.id)
     ])
 
-    // Compute peer vote scores
     const scores = {}
     members.forEach(m => { scores[m.id] = 0 })
     peerVotes.forEach(v => { scores[v.voted_for_id] = (scores[v.voted_for_id] || 0) + 1 })
 
-    // Rank by Groq
     const rankResult = await callGroq('rank_peers', {
       topic: channel.topic,
       criteria: ['logique', 'clarté', 'conviction'],
@@ -79,7 +81,6 @@ export default function Manifesto() {
     setRanking(rankResult.ranking || [])
     setWinner(rankResult.winner)
 
-    // Generate manifesto text
     const mResult = await callGroq('generate_manifesto', {
       topic: channel.topic,
       winner: rankResult.winner,
@@ -88,9 +89,9 @@ export default function Manifesto() {
       members: summaries.map(s => ({ name: s.member_name, summary: s.summary }))
     })
 
-    const slug = await saveManifesto(channel.id, mResult.result, rankResult.winner)
+    const slug = await saveManifesto(channel.id, mResult.result, rankResult.winner, rankResult.ranking)
     setManifesto(mResult.result)
-    setShareUrl(`${window.location.origin}/p/${slug}`)
+    setShareUrl(`${window.location.origin}/debattle/p/${slug}`)
     setLoading(false)
   }
 
