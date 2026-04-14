@@ -210,7 +210,7 @@ export default function Debate() {
   if (!channel) return null
 
   return (
-    <div className="page" style={{ padding: '0', gap: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden' }}>
 
       {/* Animation Round */}
       {roundAnim && (
