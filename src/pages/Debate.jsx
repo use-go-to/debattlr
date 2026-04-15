@@ -348,6 +348,10 @@ export default function Debate() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', position: 'fixed', width: '100%', top: 0, left: 0 }}>
+      {/* Bandeau topic — toujours visible, même clavier ouvert */}
+      <div style={{ background: 'rgba(124,106,247,0.12)', borderBottom: '1px solid rgba(124,106,247,0.3)', padding: '0.3rem 1rem', flexShrink: 0, zIndex: 20 }}>
+        <p style={{ fontSize: '0.72rem', color: 'var(--accent)', fontWeight: 700, lineHeight: 1.3, margin: 0 }} numberOfLines={2}>{channel.topic}</p>
+      </div>
       {roundAnim && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15,15,26,0.92)', animation: 'fadeInOut 2.5s ease forwards' }}>
           <div style={{ textAlign: 'center' }}>
@@ -370,7 +374,6 @@ export default function Debate() {
         <div className="flex items-center justify-between">
           <div style={{ flex: 1, marginRight: '0.75rem' }}>
             <div className="badge badge-accent" style={{ marginBottom: '0.25rem' }}>⚔️ Débat</div>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text)', lineHeight: 1.3, fontWeight: 600 }}>{channel.topic}</p>
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
             <div className="badge badge-warn">Tour {Math.min(round, MAX_ROUNDS)}/{MAX_ROUNDS}</div>
