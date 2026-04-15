@@ -348,12 +348,6 @@ export default function Debate() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', position: 'fixed', width: '100%', top: 0, left: 0 }}>
-      {/* Bandeau topic — position fixed absolu, jamais caché par le clavier */}
-      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, background: 'rgba(15,15,26,0.97)', borderBottom: '1px solid rgba(124,106,247,0.35)', padding: '0.3rem 1rem', backdropFilter: 'blur(8px)' }}>
-        <p style={{ fontSize: '0.72rem', color: 'var(--accent2)', fontWeight: 700, lineHeight: 1.3, margin: 0 }}>{channel.topic}</p>
-      </div>
-      {/* Spacer pour compenser le bandeau fixed */}
-      <div style={{ height: 28, flexShrink: 0 }} />
       {roundAnim && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15,15,26,0.92)', animation: 'fadeInOut 2.5s ease forwards' }}>
           <div style={{ textAlign: 'center' }}>
@@ -376,6 +370,7 @@ export default function Debate() {
         <div className="flex items-center justify-between">
           <div style={{ flex: 1, marginRight: '0.75rem' }}>
             <div className="badge badge-accent" style={{ marginBottom: '0.25rem' }}>⚔️ Débat</div>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text)', lineHeight: 1.3, fontWeight: 600 }}>{channel.topic}</p>
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
             <div className="badge badge-warn">Tour {Math.min(round, MAX_ROUNDS)}/{MAX_ROUNDS}</div>
@@ -460,6 +455,10 @@ export default function Debate() {
       </div>
 
       <div style={{ background: 'var(--bg2)', borderTop: '1px solid var(--border)', padding: '0.75rem 1.25rem', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)', flexShrink: 0 }}>
+        {/* Rappel topic — visible quand le clavier est ouvert */}
+        <div style={{ marginBottom: '0.5rem', padding: '0.3rem 0.6rem', background: 'rgba(124,106,247,0.08)', borderRadius: 6, borderLeft: '2px solid var(--accent)' }}>
+          <p style={{ fontSize: '0.68rem', color: 'var(--accent2)', fontWeight: 600, lineHeight: 1.3, margin: 0 }}>{channel.topic}</p>
+        </div>
         {/* Bloc-notes brainstorming */}
         {noteOpen && (
           <div style={{ marginBottom: '0.75rem', background: 'rgba(15,15,26,0.95)', border: '1px solid rgba(255,220,80,0.25)', borderRadius: 'var(--radius)', padding: '0.6rem 0.75rem', position: 'relative' }}>
