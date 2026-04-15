@@ -347,6 +347,15 @@ export default function Debate() {
         </div>
       )}
 
+      {isMyTurn && !myTurnDone && !readingTurn && (
+        <div key={turnStartedAt} style={{ position: 'fixed', inset: 0, zIndex: 998, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', animation: 'myTurnPulse 1s ease forwards' }}>
+          <div style={{ textAlign: 'center', padding: '1.5rem 2.5rem', background: 'rgba(251,146,60,0.15)', border: '2px solid rgba(251,146,60,0.6)', borderRadius: 20 }}>
+            <div style={{ fontSize: '2.5rem' }}>🎤</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#fb923c', marginTop: '0.4rem' }}>C'est ton tour !</div>
+          </div>
+        </div>
+      )}
+
       <div style={{ padding: '0.75rem 1.25rem', background: 'var(--bg2)', borderBottom: '1px solid var(--border)', flexShrink: 0, position: 'sticky', top: 0, zIndex: 10 }}>
         <div className="flex items-center justify-between">
           <div style={{ flex: 1, marginRight: '0.75rem' }}>
@@ -556,6 +565,12 @@ export default function Debate() {
           20% { opacity: 1; transform: scale(1); }
           80% { opacity: 1; transform: scale(1); }
           100% { opacity: 0; transform: scale(1.1); }
+        }
+        @keyframes myTurnPulse {
+          0%   { opacity: 0; transform: scale(0.7); }
+          25%  { opacity: 1; transform: scale(1.05); }
+          60%  { opacity: 1; transform: scale(1); }
+          100% { opacity: 0; transform: scale(0.95); }
         }
       `}</style>
     </div>
