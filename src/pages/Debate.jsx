@@ -455,7 +455,7 @@ export default function Debate() {
 
       <div style={{ background: 'var(--bg2)', borderTop: '1px solid var(--border)', padding: '0.75rem 1.25rem', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)', flexShrink: 0 }}>
         <div style={{ marginTop: '0.5rem', padding: '0.3rem 0.6rem', background: 'rgba(124,106,247,0.08)', borderRadius: 6, borderLeft: '2px solid var(--accent)' }}>
-          <p style={{ fontSize: '0.68rem', color: 'var(--accent2)', fontWeight: 600, lineHeight: 1.3, margin: 0 }}>{channel.topic}</p>
+          <p style={{ fontSize: '0.8rem', color: 'var(--accent2)', fontWeight: 600, lineHeight: 1.4, margin: 0 }}>{channel.topic}</p>
         </div>
         {/* Bloc-notes brainstorming */}
         {noteOpen && (
@@ -474,6 +474,7 @@ export default function Debate() {
                   const trimmed = line.trim()
                   return (
                     <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: c.bg, border: `1px solid ${c.border}`, color: c.text, borderRadius: 20, padding: '0.2rem 0.5rem 0.2rem 0.65rem', fontSize: '0.8rem', lineHeight: 1.4, wordBreak: 'break-word', cursor: 'pointer' }}
+                      onMouseDown={e => e.preventDefault()}
                       onClick={() => {
                         if (!isMyTurn || myTurnDone) return
                         const next = currentText ? currentText + ' ' + trimmed : trimmed
@@ -483,6 +484,7 @@ export default function Debate() {
                     >
                       {trimmed}
                       <button
+                        onMouseDown={e => e.preventDefault()}
                         onClick={e => {
                           e.stopPropagation()
                           const lines = noteText.split('\n')
