@@ -312,11 +312,11 @@ export default function Debate() {
   }
 
   const MEMBER_COLORS = [
-    { bg: 'rgba(124,106,247,0.15)', border: 'rgba(124,106,247,0.5)', name: '#a78bfa' },
     { bg: 'rgba(251,146,60,0.15)',  border: 'rgba(251,146,60,0.5)',  name: '#fb923c' },
     { bg: 'rgba(34,197,94,0.15)',   border: 'rgba(34,197,94,0.5)',   name: '#4ade80' },
     { bg: 'rgba(236,72,153,0.15)',  border: 'rgba(236,72,153,0.5)',  name: '#f472b6' },
     { bg: 'rgba(14,165,233,0.15)',  border: 'rgba(14,165,233,0.5)',  name: '#38bdf8' },
+    { bg: 'rgba(250,204,21,0.15)',  border: 'rgba(250,204,21,0.5)',  name: '#facc15' },
   ]
   function getMemberColor(memberId) {
     const idx = sortedMembers.findIndex(m => m.id === memberId)
