@@ -36,7 +36,7 @@ export default function Home() {
   const [loading, setLoading]   = useState(false)
   const [step, setStep]         = useState(1)         // multi-step for create
   const [maxRounds, setMaxRounds]       = useState(3)
-  const [turnDuration, setTurnDuration] = useState(90)
+  const [turnDuration, setTurnDuration] = useState(210)
   const [maxChars, setMaxChars]         = useState(500)
   const [difficulty, setDifficulty]     = useState('medium')
 
