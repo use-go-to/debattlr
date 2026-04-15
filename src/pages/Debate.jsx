@@ -48,7 +48,7 @@ export default function Debate() {
 
   useEffect(() => {
     clearInterval(timerRef.current)
-    if (waitingReady || !turnStartedAt) return
+    if (waitingReady || readingTurn || !turnStartedAt) return
 
     // Crée une clé unique pour ce tour (speaker + timestamp) pour éviter les faux resets
     const turnKey = `${speakerIndex}-${turnStartedAt}`
@@ -78,7 +78,7 @@ export default function Debate() {
     tick()
     timerRef.current = setInterval(tick, 1000)
     return () => clearInterval(timerRef.current)
-  }, [turnStartedAt, isMyTurn, waitingReady])
+  }, [turnStartedAt, isMyTurn, waitingReady, readingTurn])
 
   useEffect(() => {
     if (!channel) { navigate('/', { replace: true }); return }
@@ -373,7 +373,7 @@ export default function Debate() {
           </div>
         </div>
 
-        {!waitingReady && currentSpeaker && (
+        {!waitingReady && !readingTurn && currentSpeaker && (
           <div style={{ marginTop: '0.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
               <span style={{ fontSize: '0.75rem', color: isMyTurn ? 'var(--accent)' : 'var(--text2)' }}>
