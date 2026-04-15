@@ -25,6 +25,7 @@ export default function Debate() {
   })
   const [myTurnAnim, setMyTurnAnim] = useState(false)
   const myTurnAnimRef = useRef(null)
+  const [readingTurn, setReadingTurn] = useState(null)
   const [turnReadList, setTurnReadList] = useState([])
   const lastTurnKeyRef = useRef(null)
 
