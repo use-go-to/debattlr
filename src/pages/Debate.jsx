@@ -23,7 +23,8 @@ export default function Debate() {
   const [noteText, setNoteText] = useState(() => {
     try { return localStorage.getItem(`brainstorm-${channel?.id}-${member?.id}`) || '' } catch { return '' }
   })
-  const [readingTurn, setReadingTurn] = useState(null)   // { turnId, memberCount, readList }
+  const [myTurnAnim, setMyTurnAnim] = useState(false)
+  const myTurnAnimRef = useRef(null)
   const [turnReadList, setTurnReadList] = useState([])
   const lastTurnKeyRef = useRef(null)
 
@@ -61,7 +62,15 @@ export default function Debate() {
       }
     }
 
-    if (isMyTurn) soundMyTurn()
+    if (isMyTurn) {
+        clearTimeout(myTurnAnimRef.current)
+        const delay = roundAnim ? 2600 : 0
+        myTurnAnimRef.current = setTimeout(() => {
+          setMyTurnAnim(true)
+          soundMyTurn()
+          setTimeout(() => setMyTurnAnim(false), 1000)
+        }, delay)
+      }
 
     function tick() {
       const elapsed = Math.floor((Date.now() - new Date(turnStartedAt).getTime()) / 1000)
@@ -347,8 +356,8 @@ export default function Debate() {
         </div>
       )}
 
-      {isMyTurn && !myTurnDone && !readingTurn && (
-        <div key={turnStartedAt} style={{ position: 'fixed', inset: 0, zIndex: 998, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', animation: 'myTurnPulse 1s ease forwards' }}>
+      {isMyTurn && !myTurnDone && !readingTurn && myTurnAnim && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 998, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', animation: 'myTurnPulse 1s ease forwards' }}>
           <div style={{ textAlign: 'center', padding: '1.5rem 2.5rem', background: 'rgba(251,146,60,0.15)', border: '2px solid rgba(251,146,60,0.6)', borderRadius: 20 }}>
             <div style={{ fontSize: '2.5rem' }}>🎤</div>
             <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#fb923c', marginTop: '0.4rem' }}>C'est ton tour !</div>
