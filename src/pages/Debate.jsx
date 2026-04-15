@@ -23,6 +23,8 @@ export default function Debate() {
   const [noteText, setNoteText] = useState(() => {
     try { return localStorage.getItem(`brainstorm-${channel?.id}-${member?.id}`) || '' } catch { return '' }
   })
+  const [readingTurn, setReadingTurn] = useState(null)   // { turnId, memberCount, readList }
+  const [turnReadList, setTurnReadList] = useState([])
   const lastTurnKeyRef = useRef(null)
 
   const scrollRef      = useRef(null)
@@ -108,10 +110,13 @@ export default function Debate() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'round_commentaries', filter: `channel_id=eq.${channel.id}` }, loadAll).subscribe()
     const readySub = supabase.channel(`ready:${channel.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'round_ready', filter: `channel_id=eq.${channel.id}` }, loadAll).subscribe()
+    const readSub = supabase.channel(`turn_read:${channel.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'turn_read', filter: `channel_id=eq.${channel.id}` }, loadAll).subscribe()
     return () => {
       supabase.removeChannel(turnSub)
       supabase.removeChannel(commSub)
       supabase.removeChannel(readySub)
+      supabase.removeChannel(readSub)
     }
   }, [channel?.id])
 
@@ -124,18 +129,20 @@ export default function Debate() {
     loadingRef.current = true
     pendingRef.current = false
     try {
-      const [turnsRes, commRes, membersRes, readyRes, channelRes] = await Promise.all([
+      const [turnsRes, commRes, membersRes, readyRes, channelRes, turnReadRes] = await Promise.all([
         supabase.from('debate_turns').select('*').eq('channel_id', channel.id).order('submitted_at'),
         supabase.from('round_commentaries').select('*').eq('channel_id', channel.id).order('round'),
         supabase.from('members').select('*').eq('channel_id', channel.id).order('joined_at'),
         supabase.from('round_ready').select('*').eq('channel_id', channel.id),
-        supabase.from('channels').select('current_speaker_index,turn_started_at').eq('id', channel.id).single()
+        supabase.from('channels').select('current_speaker_index,turn_started_at').eq('id', channel.id).single(),
+        supabase.from('turn_read').select('*').eq('channel_id', channel.id)
       ])
 
       const data = turnsRes.data || []
       const comms = commRes.data || []
       const ready = readyRes.data || []
       const allMembers = membersRes.data || []
+      const turnReads = turnReadRes.data || []
       const memberCount = allMembers.length || members.length
       const chData = channelRes.data
       const dbIndex = chData?.current_speaker_index ?? 0
@@ -149,6 +156,7 @@ export default function Debate() {
       setTurns(data)
       setCommentaries(comms)
       setReadyList(ready)
+      setTurnReadList(turnReads)
       scrollToBottom()
 
       const maxRound = data.length > 0 ? Math.max(...data.map(t => t.round)) : 1
@@ -194,15 +202,30 @@ export default function Debate() {
         const currentSpeakerDone = currentSpeakerInDb ? roundTurns.some(t => t.member_id === currentSpeakerInDb.id) : false
 
         if (currentSpeakerDone) {
+          const lastTurn = roundTurns.find(t => t.member_id === currentSpeakerInDb.id)
           const nextIndex = dbIndex + 1
-          if (nextIndex < memberCount) {
-            const now = new Date().toISOString()
-            const { error } = await supabase.from('channels')
-              .update({ current_speaker_index: nextIndex, turn_started_at: now })
-              .eq('id', channel.id)
-              .eq('current_speaker_index', dbIndex)
-            if (!error) { setSpeakerIndex(nextIndex); setTurnStartedAt(now) }
+          const isLastOfRound = nextIndex >= memberCount
+
+          if (!isLastOfRound) {
+            // Phase lecture : attendre que tous aient lu avant de passer au suivant
+            const readsForTurn = turnReads.filter(r => r.turn_id === lastTurn?.id)
+            const allRead = readsForTurn.length >= memberCount
+            if (allRead) {
+              const now = new Date().toISOString()
+              const { error } = await supabase.from('channels')
+                .update({ current_speaker_index: nextIndex, turn_started_at: now })
+                .eq('id', channel.id)
+                .eq('current_speaker_index', dbIndex)
+              if (!error) { setSpeakerIndex(nextIndex); setTurnStartedAt(now) }
+              setReadingTurn(null)
+            } else {
+              setReadingTurn({ turnId: lastTurn?.id, readList: readsForTurn })
+            }
+          } else {
+            setReadingTurn(null)
           }
+        } else {
+          setReadingTurn(null)
         }
         setWaitingReady(comms.some(c => c.round === maxRound))
         setRound(maxRound)
@@ -264,6 +287,11 @@ export default function Debate() {
     await supabase.from('round_ready').upsert({ channel_id: channel.id, member_id: member.id, round: maxRound })
   }
 
+  async function handleRead() {
+    if (!readingTurn?.turnId) return
+    await supabase.from('turn_read').upsert({ channel_id: channel.id, turn_id: readingTurn.turnId, member_id: member.id })
+  }
+
   const noteTagsRef = useRef(null)
 
   const PASTEL_COLORS = [
@@ -283,6 +311,17 @@ export default function Debate() {
     }, 20)
   }
 
+  const MEMBER_COLORS = [
+    { bg: 'rgba(124,106,247,0.15)', border: 'rgba(124,106,247,0.5)', name: '#a78bfa' },
+    { bg: 'rgba(251,146,60,0.15)',  border: 'rgba(251,146,60,0.5)',  name: '#fb923c' },
+    { bg: 'rgba(34,197,94,0.15)',   border: 'rgba(34,197,94,0.5)',   name: '#4ade80' },
+    { bg: 'rgba(236,72,153,0.15)',  border: 'rgba(236,72,153,0.5)',  name: '#f472b6' },
+    { bg: 'rgba(14,165,233,0.15)',  border: 'rgba(14,165,233,0.5)',  name: '#38bdf8' },
+  ]
+  function getMemberColor(memberId) {
+    const idx = sortedMembers.findIndex(m => m.id === memberId)
+    return MEMBER_COLORS[(idx < 0 ? 0 : idx) % MEMBER_COLORS.length]
+  }
   const timerUrgent = displayTimer < 20 && displayTimer > 0 && !!turnStartedAt
   const timerExpired = displayTimer === 0 && !!turnStartedAt
   const feed = []
@@ -308,7 +347,7 @@ export default function Debate() {
         </div>
       )}
 
-      <div style={{ padding: '0.75rem 1.25rem', background: 'var(--bg2)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+      <div style={{ padding: '0.75rem 1.25rem', background: 'var(--bg2)', borderBottom: '1px solid var(--border)', flexShrink: 0, position: 'sticky', top: 0, zIndex: 10 }}>
         <div className="flex items-center justify-between">
           <div style={{ flex: 1, marginRight: '0.75rem' }}>
             <div className="badge badge-accent" style={{ marginBottom: '0.25rem' }}>⚔️ Débat</div>
@@ -363,16 +402,17 @@ export default function Debate() {
         )}
         {feed.map((item) => {
           if (item.type === 'turn') {
-            const t = item.data; const isMe = t.member_id === member?.id
+            const t = item.data
+            const mc = getMemberColor(t.member_id)
             return (
-              <div key={t.id} className={`turn-bubble ${isMe ? 'mine' : ''}`}>
+              <div key={t.id} style={{ background: mc.bg, border: `1px solid ${mc.border}`, borderRadius: 'var(--radius)', padding: '0.75rem' }}>
                 <div className="turn-meta">
-                  <div className="avatar" style={{ width: 22, height: 22, fontSize: '0.7rem' }}>{t.member_name[0]}</div>
-                  <strong>{t.member_name}</strong>
-                  <span className="badge badge-accent" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>R{t.round}</span>
+                  <div className="avatar" style={{ width: 22, height: 22, fontSize: '0.7rem', background: mc.border }}>{t.member_name[0]}</div>
+                  <strong style={{ color: mc.name }}>{t.member_name}</strong>
+                  <span className="badge" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem', background: mc.border, color: 'var(--bg)' }}>R{t.round}</span>
                   <button onClick={() => speak(t.content)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', opacity: 0.6 }} title="Écouter">🔊</button>
                 </div>
-                <p style={{ fontSize: '0.9rem', lineHeight: 1.5 }}>{t.content}</p>
+                <p style={{ fontSize: '0.9rem', lineHeight: 1.5, marginTop: '0.4rem' }}>{t.content}</p>
               </div>
             )
           }
@@ -448,7 +488,18 @@ export default function Debate() {
             />
           </div>
         )}
-        {isMyTurn && !myTurnDone ? (
+        {readingTurn ? (() => {
+          const iHaveRead = readingTurn.readList.some(r => r.member_id === member?.id)
+          const readCount = readingTurn.readList.length
+          return (
+            <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text2)' }}>📖 Prends le temps de lire l'argument…</p>
+              <button className="btn btn-primary" onClick={handleRead} disabled={iHaveRead}>
+                {iHaveRead ? `✅ Lu (${readCount}/${members.length})` : '✅ J\'ai lu — au suivant'}
+              </button>
+            </div>
+          )
+        })() : isMyTurn && !myTurnDone ? (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--text2)' }}>Ton argument</span>
@@ -494,7 +545,6 @@ export default function Debate() {
             </button>
           </div>
         )}
-
         {member?.is_host && (
           <button className="btn btn-danger" style={{ marginTop: '0.75rem', padding: '0.6rem', fontSize: '0.85rem' }} onClick={() => updateChannelStatus(channel.id, 'ai_summary')}>🏁 Terminer le débat</button>
         )}
