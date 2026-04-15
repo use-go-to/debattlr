@@ -348,10 +348,12 @@ export default function Debate() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', position: 'fixed', width: '100%', top: 0, left: 0 }}>
-      {/* Bandeau topic — toujours visible, même clavier ouvert */}
-      <div style={{ background: 'rgba(124,106,247,0.12)', borderBottom: '1px solid rgba(124,106,247,0.3)', padding: '0.3rem 1rem', flexShrink: 0, zIndex: 20 }}>
-        <p style={{ fontSize: '0.72rem', color: 'var(--accent)', fontWeight: 700, lineHeight: 1.3, margin: 0 }} numberOfLines={2}>{channel.topic}</p>
+      {/* Bandeau topic — position fixed absolu, jamais caché par le clavier */}
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, background: 'rgba(15,15,26,0.97)', borderBottom: '1px solid rgba(124,106,247,0.35)', padding: '0.3rem 1rem', backdropFilter: 'blur(8px)' }}>
+        <p style={{ fontSize: '0.72rem', color: 'var(--accent2)', fontWeight: 700, lineHeight: 1.3, margin: 0 }}>{channel.topic}</p>
       </div>
+      {/* Spacer pour compenser le bandeau fixed */}
+      <div style={{ height: 28, flexShrink: 0 }} />
       {roundAnim && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15,15,26,0.92)', animation: 'fadeInOut 2.5s ease forwards' }}>
           <div style={{ textAlign: 'center' }}>
