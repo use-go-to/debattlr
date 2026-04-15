@@ -35,10 +35,10 @@ export default function Home() {
   const [code, setCode]         = useState('')
   const [loading, setLoading]   = useState(false)
   const [step, setStep]         = useState(1)         // multi-step for create
-  const [maxRounds, setMaxRounds]       = useState(3)
+  const [maxRounds, setMaxRounds]       = useState(2)
   const [turnDuration, setTurnDuration] = useState(210)
   const [maxChars, setMaxChars]         = useState(800)
-  const [difficulty, setDifficulty]     = useState('medium')
+  const [difficulty, setDifficulty]     = useState('easy')
 
   const finalTheme = theme === 'custom' ? customTheme : theme
 
