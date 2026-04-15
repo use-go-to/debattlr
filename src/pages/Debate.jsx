@@ -463,7 +463,7 @@ export default function Debate() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
               <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'rgba(255,220,80,0.9)', letterSpacing: '0.08em' }}>✏️ BROUILLON</span>
               {noteText.trim() && (
-                <button onClick={() => saveNote('')} style={{ fontSize: '0.65rem', opacity: 0.45, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text2)' }}>🗑 Effacer</button>
+                <button onMouseDown={e => e.preventDefault()} onClick={() => saveNote('')} style={{ fontSize: '0.65rem', opacity: 0.45, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text2)' }}>🗑 Effacer</button>
               )}
             </div>
             {/* Tags par ligne */}
@@ -527,6 +527,7 @@ export default function Debate() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--text2)' }}>Ton argument</span>
               <button
+                onMouseDown={e => e.preventDefault()}
                 onClick={() => setNoteOpen(o => !o)}
                 style={{ background: noteOpen ? 'rgba(255,220,80,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${noteOpen ? 'rgba(255,220,80,0.4)' : 'var(--border)'}`, borderRadius: 6, padding: '0.2rem 0.6rem', cursor: 'pointer', fontSize: '0.75rem', color: noteOpen ? 'rgba(255,220,80,0.9)' : 'var(--text2)', fontWeight: 600 }}>
                 ✏️ {noteOpen ? 'Fermer' : 'Brouillon'}{noteText ? ' •' : ''}
@@ -562,6 +563,7 @@ export default function Debate() {
             <p className="text-muted text-sm">{myTurnDone ? '✅ Soumis — attente des autres…' : '⏳ Attends ton tour…'}</p>
             {currentSpeaker && <p className="text-xs text-muted" style={{ marginTop: '0.25rem' }}>🎤 {currentSpeaker.name} parle</p>}
             <button
+              onMouseDown={e => e.preventDefault()}
               onClick={() => setNoteOpen(o => !o)}
               style={{ marginTop: '0.6rem', background: noteOpen ? 'rgba(255,220,80,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${noteOpen ? 'rgba(255,220,80,0.4)' : 'var(--border)'}`, borderRadius: 8, padding: '0.4rem 0.9rem', cursor: 'pointer', fontSize: '0.8rem', color: noteOpen ? 'rgba(255,220,80,0.9)' : 'var(--text2)', fontWeight: 600, transition: 'all 0.2s' }}>
               ✏️ {noteOpen ? 'Fermer le brouillon' : 'Ouvrir le brouillon'}{noteText ? ' •' : ''}
