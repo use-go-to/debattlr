@@ -370,7 +370,6 @@ export default function Debate() {
         <div className="flex items-center justify-between">
           <div style={{ flex: 1, marginRight: '0.75rem' }}>
             <div className="badge badge-accent" style={{ marginBottom: '0.25rem' }}>⚔️ Débat</div>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text)', lineHeight: 1.3, fontWeight: 600 }}>{channel.topic}</p>
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
             <div className="badge badge-warn">Tour {Math.min(round, MAX_ROUNDS)}/{MAX_ROUNDS}</div>
@@ -455,8 +454,10 @@ export default function Debate() {
       </div>
 
       <div style={{ background: 'var(--bg2)', borderTop: '1px solid var(--border)', padding: '0.75rem 1.25rem', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)', flexShrink: 0 }}>
-        {/* Rappel topic — visible quand le clavier est ouvert */}
-        <div style={{ marginBottom: '0.5rem', padding: '0.3rem 0.6rem', background: 'rgba(124,106,247,0.08)', borderRadius: 6, borderLeft: '2px solid var(--accent)' }}>
+        {member?.is_host && (
+          <button className="btn btn-danger" style={{ marginTop: '0.75rem', padding: '0.6rem', fontSize: '0.85rem' }} onClick={() => updateChannelStatus(channel.id, 'ai_summary')}>🏁 Terminer le débat</button>
+        )}
+        <div style={{ marginTop: '0.5rem', padding: '0.3rem 0.6rem', background: 'rgba(124,106,247,0.08)', borderRadius: 6, borderLeft: '2px solid var(--accent)' }}>
           <p style={{ fontSize: '0.68rem', color: 'var(--accent2)', fontWeight: 600, lineHeight: 1.3, margin: 0 }}>{channel.topic}</p>
         </div>
         {/* Bloc-notes brainstorming */}
