@@ -303,6 +303,7 @@ export default function Debate() {
   }
 
   const noteTagsRef = useRef(null)
+  const argTextareaRef = useRef(null)
 
   const PASTEL_COLORS = [
     { bg: 'rgba(255,182,193,0.18)', border: 'rgba(255,182,193,0.5)', text: '#ffb6c1' },
@@ -528,12 +529,18 @@ export default function Debate() {
               <span style={{ fontSize: '0.75rem', color: 'var(--text2)' }}>Ton argument</span>
               <button
                 onMouseDown={e => e.preventDefault()}
-                onClick={() => setNoteOpen(o => !o)}
+                onClick={() => {
+                  setNoteOpen(o => {
+                    if (o) setTimeout(() => argTextareaRef.current?.focus(), 50)
+                    return !o
+                  })
+                }}
                 style={{ background: noteOpen ? 'rgba(255,220,80,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${noteOpen ? 'rgba(255,220,80,0.4)' : 'var(--border)'}`, borderRadius: 6, padding: '0.2rem 0.6rem', cursor: 'pointer', fontSize: '0.75rem', color: noteOpen ? 'rgba(255,220,80,0.9)' : 'var(--text2)', fontWeight: 600 }}>
                 ✏️ {noteOpen ? 'Fermer' : 'Brouillon'}{noteText ? ' •' : ''}
               </button>
             </div>
             <textarea className="input" placeholder="Ton argument…"
+              ref={argTextareaRef}
               value={currentText}
               onChange={e => {
                 setCurrentText(e.target.value)
