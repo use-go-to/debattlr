@@ -458,6 +458,16 @@ export default function Debate() {
         <div style={{ marginTop: '0.5rem', padding: '0.3rem 0.6rem', background: 'rgba(124,106,247,0.08)', borderRadius: 6, borderLeft: '2px solid var(--accent)' }}>
           <p style={{ fontSize: '0.8rem', color: 'var(--accent2)', fontWeight: 600, lineHeight: 1.4, margin: 0 }}>{channel.topic}</p>
         </div>
+        {!waitingReady && !readingTurn && currentSpeaker && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.4rem', padding: '0.2rem 0.6rem' }}>
+            <span style={{ fontSize: '0.75rem', color: isMyTurn ? 'var(--accent)' : 'var(--text2)' }}>
+              {isMyTurn ? '🎤 Ton tour !' : `🎤 ${currentSpeaker.name} parle…`}
+            </span>
+            <span className={`timer ${timerUrgent ? 'urgent' : ''}`} style={{ fontSize: '0.95rem', fontWeight: 900 }}>
+              {timerExpired ? '⏰' : `${Math.floor(displayTimer / 60)}:${String(displayTimer % 60).padStart(2, '0')}`}
+            </span>
+          </div>
+        )}
         {/* Bloc-notes brainstorming */}
         {noteOpen && (
           <div style={{ marginBottom: '0.75rem', background: 'rgba(15,15,26,0.95)', border: '1px solid rgba(255,220,80,0.25)', borderRadius: 'var(--radius)', padding: '0.6rem 0.75rem', position: 'relative' }}>
